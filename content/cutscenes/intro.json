@@ -1,0 +1,22 @@
+{
+  "id": "intro_round1",
+  "music": "music_loop",
+  "duration": 14.2,
+  "beats": [
+    { "t": 0.0,  "type": "camera", "pos": [-20, 8, -16], "lookAt": [0, 1, 30], "fov": 55, "dur": 4.0 },
+    { "t": 0.3,  "type": "subtitle", "speaker": "MAX VOLT", "text": "WELCOME... TO THE VOLT DOME!", "dur": 2.4 },
+    { "t": 1.0,  "type": "audio", "sfx": "cheer" },
+    { "t": 2.7,  "type": "camera", "pos": [-14, 5, 6], "lookAt": [0, 0, 60], "fov": 60, "dur": 2.5 },
+    { "t": 2.9,  "type": "subtitle", "speaker": "MAX VOLT", "text": "SEVEN CONTESTANTS. ONE TRACK. NO MERCY.", "dur": 2.4 },
+    { "t": 5.2,  "type": "camera", "pos": [16, 6, 120], "lookAt": [0, 0, 108], "fov": 55, "dur": 3.7 },
+    { "t": 5.5,  "type": "overlay", "graphic": "prize", "amount": 1000000, "dur": 2.6 },
+    { "t": 5.6,  "type": "audio", "sfx": "stinger_win" },
+    { "t": 6.0,  "type": "subtitle", "speaker": "MAX VOLT", "text": "THE GRAND PRIZE... ONE MILLION DOLLARS!", "dur": 2.5 },
+    { "t": 8.9,  "type": "camera", "pos": [0, 3, 150], "lookAt": [0, 0, 210], "fov": 60, "dur": 3.0 },
+    { "t": 9.0,  "type": "event", "name": "confetti" },
+    { "t": 9.2,  "type": "subtitle", "speaker": "RINA 'THE RULES' KAY", "text": "Contestants: eliminated runners forfeit the prize pot. Read your contract.", "dur": 3.0 },
+    { "t": 12.1, "type": "camera", "pos": [0, 2.4, 232], "lookAt": [0, 1.8, 240], "fov": 65, "dur": 2.0 },
+    { "t": 12.2, "type": "subtitle", "speaker": "BOOM MIKE", "text": "CONTESTANTS... ON YOUR MARKS!", "dur": 1.8 },
+    { "t": 12.6, "type": "audio", "sfx": "go" }
+  ]
+}

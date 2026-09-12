@@ -1,0 +1,10 @@
+{
+  "bots": [
+    { "name": "NOVA",  "color": "#ff4fd8", "personality": { "riskTolerance": 0.80, "aggression": 0.50, "puzzleSkill": 0.90, "routeGreed": 0.50, "pace": 1.05, "spendStyle": "Buyer" } },
+    { "name": "JAX",   "color": "#ff9d2e", "personality": { "riskTolerance": 0.95, "aggression": 0.80, "puzzleSkill": 0.40, "routeGreed": 0.90, "pace": 1.03, "spendStyle": "Saboteur" } },
+    { "name": "MIRA",  "color": "#3fd2ff", "personality": { "riskTolerance": 0.30, "aggression": 0.20, "puzzleSkill": 0.95, "routeGreed": 0.20, "pace": 0.97, "spendStyle": "Saver" } },
+    { "name": "TANK",  "color": "#8dff3f", "personality": { "riskTolerance": 0.60, "aggression": 0.90, "puzzleSkill": 0.30, "routeGreed": 0.30, "pace": 0.93, "spendStyle": "Saver" } },
+    { "name": "LUXE",  "color": "#ffd23f", "personality": { "riskTolerance": 0.50, "aggression": 0.40, "puzzleSkill": 0.60, "routeGreed": 0.60, "pace": 0.99, "spendStyle": "Buyer" } },
+    { "name": "PIXEL", "color": "#b06bff", "personality": { "riskTolerance": 0.70, "aggression": 0.30, "puzzleSkill": 0.50, "routeGreed": 0.70, "pace": 1.00, "spendStyle": "Saboteur" } }
+  ]
+}

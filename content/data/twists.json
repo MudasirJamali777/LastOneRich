@@ -1,0 +1,28 @@
+{
+  "twists": [
+    {
+      "id": "conveyor_plus", "name": "CONVEYOR CHAOS", "desc": "All conveyor belts run 25% faster!",
+      "minRound": 2, "conflictsWith": [],
+      "effects": [ { "target": "conveyor", "param": "speed", "mult": 1.25 } ],
+      "maxMult": { "conveyor.speed": 1.5 }
+    },
+    {
+      "id": "wind_plus", "name": "DOME HEADWIND", "desc": "Wind cannons blow 25% harder!",
+      "minRound": 2, "conflictsWith": [],
+      "effects": [ { "target": "wind", "param": "strength", "mult": 1.25 } ],
+      "maxMult": { "wind.strength": 1.5 }
+    },
+    {
+      "id": "hammer_plus", "name": "TURBO HAMMERS", "desc": "Rotating hammers spin 20% faster!",
+      "minRound": 2, "conflictsWith": [],
+      "effects": [ { "target": "hammer", "param": "speed", "mult": 1.2 } ],
+      "maxMult": { "hammer.speed": 1.4 }
+    },
+    {
+      "id": "slime_plus", "name": "EXTRA SLIME", "desc": "The slime pools are extra sticky!",
+      "minRound": 2, "conflictsWith": [],
+      "effects": [ { "target": "slime", "param": "speedMult", "mult": 0.8 } ],
+      "maxMult": { "slime.speedMult": 0.6 }
+    }
+  ]
+}

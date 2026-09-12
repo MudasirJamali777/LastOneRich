@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>LastOneRich</RootNamespace>
+    <AssemblyName>LastOneRich</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.2.1105" />
+  </ItemGroup>
+
+  <!-- Data-driven content: JSON levels/config + generated gfx/sfx. No MGCB needed for the slice. -->
+  <ItemGroup>
+    <None Include="..\..\content\**\*" LinkBase="content\" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

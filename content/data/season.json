@@ -1,0 +1,11 @@
+{
+  "seasonName": "SEASON 1: WELCOME TO THE VOLT DOME",
+  "grandPrize": 1000000,
+  "contestants": 7,
+  "rounds": [
+    { "round": 1, "level": "level01", "baseReward": 5000, "twistPool": [], "cashOutAfter": false },
+    { "round": 2, "level": "level01", "baseReward": 7500, "twistPool": ["conveyor_plus", "wind_plus"], "cashOutAfter": true },
+    { "round": 3, "level": "level01", "baseReward": 10000, "twistPool": ["conveyor_plus", "wind_plus", "hammer_plus", "slime_plus"], "cashOutAfter": false }
+  ],
+  "cashOutOffers": { "2": 60000 }
+}
