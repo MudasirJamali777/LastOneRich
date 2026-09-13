@@ -1,7 +1,45 @@
 {
-  "riskMultiplier": 2.0,
-  "speedBonusParSeconds": 75,
-  "speedBonusAmount": 1500,
-  "placementBonus": { "1": 2500, "2": 1500, "3": 1000, "4": 500, "5": 250 },
-  "topHalfBonus": 300
+ "riskMultiplier": 2.0,
+ "speedBonusParSeconds": 75,
+ "speedBonusAmount": 1500,
+ "placementBonus": {
+  "1": 2500,
+  "2": 1500,
+  "3": 1000,
+  "4": 500,
+  "5": 250
+ },
+ "topHalfBonus": 300,
+ "auctionItems": [
+  {
+   "id": "mapview",
+   "name": "TWIST PREVIEW",
+   "desc": "Rina leaks the next twist early. (Intel only... this time.)",
+   "price": 10000
+  },
+  {
+   "id": "shield",
+   "name": "STRIKE SHIELD",
+   "desc": "Ignore your next drone scan.",
+   "price": 15000
+  },
+  {
+   "id": "sabotage",
+   "name": "SABOTAGE TOKEN",
+   "desc": "A mystery crate 'falls' on a rival.",
+   "price": 25000
+  },
+  {
+   "id": "extra_life",
+   "name": "EXTRA LIFE",
+   "desc": "Survive your next elimination.",
+   "price": 40000
+  },
+  {
+   "id": "golden_ticket",
+   "name": "GOLDEN TICKET",
+   "desc": "Eliminated before the finale? You're back in.",
+   "price": 60000
+  }
+ ]
 }

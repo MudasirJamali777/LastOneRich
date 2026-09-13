@@ -1,11 +1,123 @@
 {
-  "seasonName": "SEASON 1: WELCOME TO THE VOLT DOME",
-  "grandPrize": 1000000,
-  "contestants": 7,
-  "rounds": [
-    { "round": 1, "level": "level01", "baseReward": 5000, "twistPool": [], "cashOutAfter": false },
-    { "round": 2, "level": "level01", "baseReward": 7500, "twistPool": ["conveyor_plus", "wind_plus"], "cashOutAfter": true },
-    { "round": 3, "level": "level01", "baseReward": 10000, "twistPool": ["conveyor_plus", "wind_plus", "hammer_plus", "slime_plus"], "cashOutAfter": false }
-  ],
-  "cashOutOffers": { "2": 60000 }
+ "seasonName": "SEASON 1: WELCOME TO THE VOLT DOME",
+ "grandPrize": 1000000,
+ "contestants": 24,
+ "rounds": [
+  {
+   "round": 1,
+   "level": "level01",
+   "baseReward": 5000,
+   "twistPool": [],
+   "cashOutAfter": false
+  },
+  {
+   "round": 2,
+   "level": "level02",
+   "baseReward": 7500,
+   "twistPool": [
+    "wind_plus"
+   ],
+   "cashOutAfter": true
+  },
+  {
+   "round": 3,
+   "level": "level03",
+   "baseReward": 10000,
+   "twistPool": [
+    "drone_plus"
+   ],
+   "cashOutAfter": false
+  },
+  {
+   "round": 4,
+   "level": "level04",
+   "baseReward": 15000,
+   "twistPool": [
+    "timer_plus"
+   ],
+   "cashOutAfter": true
+  },
+  {
+   "round": 5,
+   "level": "level05",
+   "baseReward": 20000,
+   "twistPool": [
+    "hammer_plus"
+   ],
+   "cashOutAfter": false
+  },
+  {
+   "round": 6,
+   "level": "level06",
+   "baseReward": 30000,
+   "twistPool": [
+    "wind_plus",
+    "timer_plus"
+   ],
+   "cashOutAfter": true
+  },
+  {
+   "round": 7,
+   "level": "level07",
+   "baseReward": 40000,
+   "twistPool": [
+    "slime_plus"
+   ],
+   "cashOutAfter": false
+  },
+  {
+   "round": 8,
+   "level": "level08",
+   "baseReward": 50000,
+   "twistPool": [
+    "timer_plus",
+    "hammer_plus"
+   ],
+   "cashOutAfter": true
+  },
+  {
+   "round": 9,
+   "level": "level09",
+   "baseReward": 70000,
+   "twistPool": [
+    "ice_plus",
+    "wind_plus"
+   ],
+   "cashOutAfter": false
+  },
+  {
+   "round": 10,
+   "level": "none",
+   "baseReward": 0,
+   "twistPool": [],
+   "cashOutAfter": false
+  },
+  {
+   "round": 11,
+   "level": "level11",
+   "baseReward": 100000,
+   "twistPool": [
+    "conveyor_plus",
+    "hammer_plus",
+    "wind_plus",
+    "slime_plus"
+   ],
+   "cashOutAfter": false
+  },
+  {
+   "round": 12,
+   "level": "level12",
+   "baseReward": 0,
+   "twistPool": [
+    "wind_plus"
+   ],
+   "cashOutAfter": false
+  }
+ ],
+ "cashOutOffers": {
+  "2": 60000,
+  "4": 150000,
+  "6": 300000,
+  "8": 500000
+ }
 }

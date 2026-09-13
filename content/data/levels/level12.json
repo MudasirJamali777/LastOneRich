@@ -1,0 +1,200 @@
+{
+ "id": "level12",
+ "name": "THE BUTTON",
+ "type": "FinaleButton",
+ "timeLimit": 90,
+ "respawnPenalty": 0,
+ "killY": -10,
+ "cosmeticCrowd": true,
+ "spawns": [],
+ "spawnGrid": [
+  0,
+  0,
+  5,
+  2.4,
+  2.2,
+  6
+ ],
+ "checkpoints": [],
+ "finish": {
+  "pos": [
+   0,
+   2,
+   20
+  ],
+  "size": [
+   1,
+   1,
+   1
+  ]
+ },
+ "elimination": {
+  "rule": "NoElimination",
+  "percent": 0
+ },
+ "geometry": [
+  {
+   "kind": "box",
+   "pos": [
+    0,
+    -0.5,
+    20
+   ],
+   "size": [
+    26,
+    1,
+    44
+   ],
+   "color": "#ffd23f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    -13.5,
+    1,
+    20
+   ],
+   "size": [
+    1,
+    3,
+    45
+   ],
+   "color": "#c9971f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    13.5,
+    1,
+    20
+   ],
+   "size": [
+    1,
+    3,
+    45
+   ],
+   "color": "#c9971f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    0,
+    1,
+    -2.5
+   ],
+   "size": [
+    28,
+    3,
+    1
+   ],
+   "color": "#c9971f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    0,
+    1,
+    42.5
+   ],
+   "size": [
+    28,
+    3,
+    1
+   ],
+   "color": "#c9971f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    -10,
+    1.5,
+    8
+   ],
+   "size": [
+    2,
+    4,
+    2
+   ],
+   "color": "#ff4fd8"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    10,
+    1.5,
+    8
+   ],
+   "size": [
+    2,
+    4,
+    2
+   ],
+   "color": "#3fd2ff"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    -10,
+    1.5,
+    32
+   ],
+   "size": [
+    2,
+    4,
+    2
+   ],
+   "color": "#8dff3f"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    10,
+    1.5,
+    32
+   ],
+   "size": [
+    2,
+    4,
+    2
+   ],
+   "color": "#b06bff"
+  },
+  {
+   "kind": "box",
+   "pos": [
+    0,
+    -14,
+    20
+   ],
+   "size": [
+    60,
+    2,
+    90
+   ],
+   "color": "#141726",
+   "collide": false
+  }
+ ],
+ "button": {
+  "pos": [
+   0,
+   0,
+   20
+  ],
+  "radius": 7,
+  "staminaDrain": 9,
+  "forcedOffSeconds": 5
+ },
+ "waypoints": {
+  "nodes": [
+   {
+    "pos": [
+     0,
+     0,
+     20
+    ]
+   }
+  ],
+  "edges": []
+ }
+}

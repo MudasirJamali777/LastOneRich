@@ -1,0 +1,18 @@
+{
+  "id": "intro_template",
+  "music": "music_loop",
+  "duration": 12.5,
+  "beats": [
+    { "t": 0.0,  "type": "cameraOrbit", "radius": 34, "height": 14, "speed": 0.22, "fov": 55 },
+    { "t": 0.3,  "type": "subtitle", "speaker": "MAX VOLT", "text": "ROUND {ROUND_NUM} OF {ROUND_TOTAL}... {ROUND_NAME}!", "dur": 2.6 },
+    { "t": 0.9,  "type": "audio", "sfx": "cheer" },
+    { "t": 3.0,  "type": "cameraOrbit", "radius": 20, "height": 7, "speed": -0.34, "fov": 60 },
+    { "t": 3.1,  "type": "subtitle", "speaker": "RINA 'THE RULES' KAY", "text": "{MODE_RULES}", "dur": 3.2 },
+    { "t": 6.4,  "type": "cameraOrbit", "radius": 42, "height": 20, "speed": 0.18, "fov": 52 },
+    { "t": 6.5,  "type": "overlay", "graphic": "prize", "amount": 1000000, "dur": 2.4 },
+    { "t": 6.6,  "type": "subtitle", "speaker": "MAX VOLT", "text": "AND STILL... ONE MILLION DOLLARS ON THE LINE!", "dur": 2.4 },
+    { "t": 9.0,  "type": "event", "name": "confetti" },
+    { "t": 9.1,  "type": "subtitle", "speaker": "BOOM MIKE", "text": "CONTESTANTS... {MODE_OBJ}", "dur": 2.9 },
+    { "t": 12.0, "type": "audio", "sfx": "go" }
+  ]
+}
