@@ -13,6 +13,7 @@ public sealed class WaypointGraph
     public List<(int a, int b, float risk)> Edges = new();
     public List<(int node, float risk)>[] Adj = System.Array.Empty<List<(int, float)>>();
     public double[] DistToGoal = System.Array.Empty<double>();
+    public readonly Dictionary<int, double[]> ExtraFields = new();
     public int GoalNode { get; private set; } = -1;
 
     public static WaypointGraph FromDTO(WaypointsDTO dto)
@@ -80,17 +81,45 @@ public sealed class WaypointGraph
         }
     }
 
-    /// <summary>Next hop toward the goal, biased by this bot's route greed (risky-but-short edges).</summary>
-    public int BestNext(int from, double routeGreed)
+    /// <summary>Dijkstra into an extra named field (vault / deposit routes).</summary>
+    public void ComputeExtra(int goal)
     {
-        if (from == GoalNode) return from; // goal is absorbing — no backtracking off the finish
+        if (ExtraFields.ContainsKey(goal) || Nodes.Length == 0) return;
+        var dist = new double[Nodes.Length];
+        var done = new bool[Nodes.Length];
+        Array.Fill(dist, double.PositiveInfinity);
+        dist[goal] = 0;
+        for (int iter = 0; iter < Nodes.Length; iter++)
+        {
+            int u = -1; double best = double.PositiveInfinity;
+            for (int i = 0; i < Nodes.Length; i++)
+                if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+            if (u < 0) break;
+            done[u] = true;
+            foreach (var (v, risk) in Adj[u])
+            {
+                float len = Vector3.Distance(Nodes[u], Nodes[v]);
+                double cost = dist[u] + len * (1.0 + 0.5 * risk);
+                if (dist[u] + cost < dist[v]) dist[v] = dist[u] + cost;
+            }
+        }
+        ExtraFields[goal] = dist;
+    }
+
+    /// <summary>Next hop toward the goal, biased by this bot's route greed (risky-but-short edges).</summary>
+    public int BestNext(int from, double routeGreed) => BestNext(from, routeGreed, null);
+
+    public int BestNext(int from, double routeGreed, double[] field)
+    {
+        field ??= DistToGoal;
+        if (field[from] <= 0.0001) return from; // at goal — absorbing
         int best = from;
         double bestCost = double.PositiveInfinity;
         foreach (var (v, risk) in Adj[from])
         {
-            if (double.IsInfinity(DistToGoal[v])) continue;
+            if (double.IsInfinity(field[v])) continue;
             float len = Vector3.Distance(Nodes[from], Nodes[v]);
-            double cost = DistToGoal[v] + len * (1.0 + risk * (1.0 - routeGreed));
+            double cost = field[v] + len * (1.0 + risk * (1.0 - routeGreed));
             if (cost < bestCost) { bestCost = cost; best = v; }
         }
         return best;

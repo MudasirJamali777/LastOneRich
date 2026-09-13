@@ -29,4 +29,18 @@ public sealed class Actor
     public bool Finished;
     public double FinishTime = -1;
     public float CelebrateHop;
+
+    // --- mode state (SurvivalZone / StrikesOut / ScoreCollect / FinaleButton) ---
+    public bool RoundOut;          // eliminated mid-round (strikes / periodic cut)
+    public double RoundOutTime = -1;
+    public int Strikes;
+    public float StrikeCd;
+    public double Score;           // survival seconds / deposited value / finale score
+    public double WaitTime;        // finale: time off-button (builds multiplier)
+    public double Stamina = 100;
+    public double ForcedOff;       // finale: forced cooldown after stamina burnout
+    public bool OnButton;
+    public int Carrying;           // heist bricks
+    public float CarryCd;
+    public bool InIce;
 }

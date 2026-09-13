@@ -62,9 +62,9 @@ public sealed class CollisionWorld
     }
 
     public static bool PointInBox(Vector3 p, Vector3 center, Vector3 half) =>
-        System.MathF.Abs(p.X - center.X) < half.X &&
-        System.MathF.Abs(p.Y - center.Y) < half.Y &&
-        System.MathF.Abs(p.Z - center.Z) < half.Z;
+        System.MathF.Abs(p.X - center.X) <= half.X &&
+        System.MathF.Abs(p.Y - center.Y) <= half.Y &&
+        System.MathF.Abs(p.Z - center.Z) <= half.Z;
 
     public void Integrate(Actor a, float dt, Vector3 carry)
     {

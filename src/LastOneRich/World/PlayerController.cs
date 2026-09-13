@@ -26,9 +26,9 @@ public sealed class PlayerController
 
         var mv = a.Stagger > 0 ? Vector2.Zero : inp.Move;
 
-        float maxS = Phys.MaxSpeed * (a.InSlime ? (float)lv.SlimeSpeedMult : 1f);
+        float maxS = Phys.MaxSpeed * (float)Modes.SpeedMultiplierFor(a, lv);
         var wish = new Vector3(mv.X, 0, mv.Y) * maxS;
-        float accel = (a.OnGround ? Phys.Accel : Phys.AirAccel) * (a.InSlime ? 0.5f : 1f);
+        float accel = (a.OnGround ? Phys.Accel : Phys.AirAccel) * (a.InSlime ? 0.5f : 1f) * (a.InIce ? 0.45f : 1f);
 
         if (_diveT > 0)
         {
@@ -42,8 +42,9 @@ public sealed class PlayerController
             Phys.Approach(ref a.Vel.Z, wish.Z, accel, dt);
             if (a.OnGround && mv.LengthSquared() < 0.001f)
             {
-                Phys.Approach(ref a.Vel.X, 0f, Phys.Friction, dt);
-                Phys.Approach(ref a.Vel.Z, 0f, Phys.Friction, dt);
+                float fr = Phys.Friction * (a.InIce ? 0.25f : 1f);
+                Phys.Approach(ref a.Vel.X, 0f, fr, dt);
+                Phys.Approach(ref a.Vel.Z, 0f, fr, dt);
             }
         }
 

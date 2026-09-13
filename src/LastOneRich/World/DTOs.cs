@@ -30,11 +30,22 @@ public sealed class EconomyDTO
     public double SpeedBonusAmount { get; set; } = 1500;
     public Dictionary<string, double> PlacementBonus { get; set; } = new();
     public double TopHalfBonus { get; set; }
+    public List<AuctionItemDTO> AuctionItems { get; set; } = new();
+}
+
+public sealed class AuctionItemDTO
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Desc { get; set; } = "";
+    public double Price { get; set; }
 }
 
 public sealed class BotsDTO
 {
     public List<BotDTO> Bots { get; set; } = new();
+    public int FillCount { get; set; }                 // fill bots to reach season size
+    public List<string> FillNames { get; set; } = new();
 }
 
 public sealed class BotDTO
@@ -98,6 +109,41 @@ public sealed class LevelDTO
     public List<HammerDTO> Hammers { get; set; } = new();
     public List<MoverDTO> Movers { get; set; } = new();
     public WaypointsDTO Waypoints { get; set; } = new();
+    // --- non-race mode config ---
+    public SafeZoneDTO SafeZone { get; set; }
+    public List<DroneDTO> Drones { get; set; } = new();
+    public float[][] IceZones { get; set; } = System.Array.Empty<float[]>(); // [x,y,z,sx,sy,sz,friction]
+    public ZoneDTO Vault { get; set; }
+    public ZoneDTO Deposit { get; set; }
+    public double BrickValue { get; set; } = 10000;
+    public int CarryCap { get; set; } = 3;
+    public ButtonDTO Button { get; set; }
+    public float[] SpawnGrid { get; set; } // [x,y,z, dx,dz, cols] — fills up to contestant count
+}
+
+public sealed class SafeZoneDTO
+{
+    public float[] Pos { get; set; } = new float[3];
+    public float[] Size { get; set; } = new float[] { 12, 4, 12 };
+    public double ShrinkTo { get; set; }   // final XZ half-size (0 = no shrink)
+    public double ShrinkSeconds { get; set; } = 45;
+}
+
+public sealed class DroneDTO
+{
+    public float[] A { get; set; } = new float[3];
+    public float[] B { get; set; } = new float[3];
+    public double Speed { get; set; } = 6;
+    public double Radius { get; set; } = 3.2;
+    public double Phase { get; set; }
+}
+
+public sealed class ButtonDTO
+{
+    public float[] Pos { get; set; } = new float[3];
+    public double Radius { get; set; } = 6;
+    public double StaminaDrain { get; set; } = 9;   // per second while holding
+    public double ForcedOffSeconds { get; set; } = 5;
 }
 
 public sealed class GeoDTO
@@ -120,6 +166,7 @@ public sealed class EliminationDTO
 {
     public string Rule { get; set; } = "TimeTrialRankCut";
     public double Percent { get; set; } = 20;
+    public int TopN { get; set; } = 6;          // TopNAdvance
 }
 
 public sealed class ConveyorDTO
@@ -206,4 +253,9 @@ public sealed class CutsceneBeatDTO
     public double Amount { get; set; }
     public string Sfx { get; set; }
     public string Name { get; set; }
+    // cameraOrbit beats (code-driven, level-agnostic)
+    public double CenterZ { get; set; } = -1;   // -1 = auto (level mid)
+    public double Radius { get; set; } = 30;
+    public double Height { get; set; } = 12;
+    public double Speed { get; set; } = 0.25;   // rad/s
 }

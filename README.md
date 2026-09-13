@@ -1,12 +1,16 @@
-# LAST ONE RICH! — Vertical Slice
+# LAST ONE RICH! — Season 1
 
 A "viral mega-challenge show" competition game (original fictional branding, MrBeast-style *energy*),
 built with **C# / .NET 8 + MonoGame DesktopGL** — Visual Studio only, code-first, data-driven.
 
-This repository is the **Section 19 vertical slice** of the GDD, proven end-to-end:
+The GDD §19 vertical slice has been expanded into the **full 12-round Season 1**:
 
-> one obstacle-race level → waypoint bots that finish it → results ceremony + elimination cut →
-> Bank vs Risk wallet decision → JSON intro cutscene → twist reveal → (repeatable rounds)
+> intro cutscene (tokenized JSON template) → 12 rounds across 6 game modes →
+> results ceremony + data-driven elimination → Bank vs Risk → cash-out offers →
+> the Auction of Doom intermission → twist reveals → grand-finale "The Button" → champion ending
+
+The whole season is machine-verified: the headless harness simulates all 12 rounds with the
+real physics/AI/scoring code — **ALL CHECKS PASSED ✔**, exit code 0.
 
 Everything visual is primitives + a generated bitmap font; everything audible is generated WAVs.
 **No Content Pipeline (.mgcb), no external editor, no native tools** — build and run.
@@ -36,13 +40,15 @@ Simulates real races with the *same physics + AI code* the game uses (no GPU, no
 ```bash
 dotnet run --project src/HeadlessSim -c Release
 ```
-Current result: **7/7 bots finish in every twist scenario — ALL CHECKS PASSED ✔**
-It also runs the season/twist validator and fails (exit code ≠ 0) on any regression.
+Current result: **full 12-round season — ALL CHECKS PASSED ✔** (per-round verdicts,
+roster shrink 24→3, champion line, exit 0). It verifies the season/twist/level validator,
+every mode's scoring/elimination, and the **camera input-axis acceptance check**
+(cam.RightDir must equal screen-right for the chase cam — the A/D regression gate).
 
 | flag | effect |
 |---|---|
-| `--debug` | 5s position trace + fall/respawn log + final standings |
-| `--debug --fine --who=NOVA --until=40.2` | 0.5s per-actor frame trace (AI debugging) |
+| `--debug` | 5s position trace per round + per-round verdicts |
+| (removed) `--fine` / `--who` | replaced by the full-season harness |
 
 ### Dev launch flags (game)
 | flag | effect |
@@ -50,6 +56,8 @@ It also runs the season/twist validator and fails (exit code ≠ 0) on any regre
 | `--goto=menu` | skip the studio splash |
 | `--goto=intro` | jump straight into the intro cutscene |
 | `--goto=game` | jump straight into Round 1 gameplay |
+| `--round=N` | with `--goto=game`: start at season round N (1–12; 10 = Auction) |
+| `--overlay` | start with the F3 debug overlay visible |
 | `--shot=path.png --shot-frame=N` | save a screenshot at frame N, then exit |
 
 ---
@@ -64,10 +72,55 @@ It also runs the season/twist validator and fails (exit code ≠ 0) on any regre
 | Confirm / skip | Enter / Space / E | A |
 | Menu choice | ← → or 1 / 2 | d-pad / bumpers |
 | Pause | Esc | Start |
+| Debug overlay | F3 | — |
+
+### Remapping keys — `content/data/controls.json`
+```json
+{ "moveLeft": ["A", "Left"], "moveRight": ["D", "Right"], "moveForward": ["W", "Up"],
+  "moveBack": ["S", "Down"], "jump": ["Space"], "dive": ["LeftShift", "RightShift"], ... }
+```
+Edit, save, restart. Invalid names are ignored; delete the file to get defaults back.
+
+### Movement model (important)
+Input is **camera-relative**: keys/stick produce *screen-space intent* which
+`GameplayState.ResolveMove` converts to world XZ using the live chase-camera basis —
+so **A is always screen-left and D always screen-right**, at every camera yaw.
+The F3 overlay shows RAW intent vs WORLD direction, plus FPS and WASD indicators.
 
 ---
 
-## 3) What's in the slice
+## 3) Season 1 — the 12 rounds
+
+| # | round | mode | elimination |
+|---|---|---|---|
+| 1 | WELCOME RUN | Race (obstacle course) | TimeTrialRankCut 20% |
+| 2 | SHRINKING SPOTLIGHT | SurvivalZone (spotlight shrinks) | ScoreRankCut 25% |
+| 3 | DRONE DODGE | StrikesOut (3 scans = out) | StrikesOut (+percent fallback) |
+| 4 | PRIZE SHOP MAZE | Race through conveyor maze | TimeTrialRankCut 8% |
+| 5 | BLOCK BOOM TOWER | ScoreCollect (vault→deposit bricks) | ScoreRankCut 8% |
+| 6 | GLASS PATH | Race on stepping stones | TimeTrialRankCut 8% |
+| 7 | TRIVIA GATES | Race through trivia door walls | TimeTrialRankCut 8% |
+| 8 | THE HEIST | ScoreCollect under hammers | ScoreRankCut 8% |
+| 9 | FREEZING ROOM | SurvivalZone on ice | ScoreRankCut 25% |
+| 10 | THE AUCTION OF DOOM | intermission — buy upgrades | — |
+| 11 | MEGA GAUNTLET | Race remix of rounds 1–9 | TopNAdvance (top 3) |
+| 12 | THE BUTTON | FinaleButton (king-of-the-hill) | last-one-standing wins |
+
+Season shape: 24 contestants (6 rivals + 17 fill bots + YOU), roster shrinks to a
+3-contestant Button finale. Twist pools per round, cash-out offers after rounds 2/4/6/8,
+five auction items (shield, sabotage, extra life, golden ticket, twist preview).
+
+### Modes (all in `World/Modes.cs`, pure data + code)
+- **Race** — waypoint course, checkpoint respawns, finish-time ranking.
+- **SurvivalZone** — score = seconds inside a shrinking spotlight; elimination by score rank.
+- **StrikesOut** — scanner drones patrol bands; each scan = 1 strike (6 s immunity),
+  3 strikes = out; bots dodge by crossing behind the sweep.
+- **ScoreCollect** — grab bricks at the vault (carry cap 3, carrying slows you ×0.62),
+  deposit for cash; most banked wins.
+- **FinaleButton** — stand on the button to drain rivals' scores (1.5/s per presser);
+  standing drains stamina (burnout → forced off 5 s); waiting off-button builds score.
+
+### What was in the slice (still true)
 
 - **Level 1 "WELCOME RUN"** — pure JSON (`content/data/levels/level01.json`): start pad,
   twin conveyor belts, two rotating hammers, a hammer gauntlet, stepping stones through a
@@ -106,12 +159,13 @@ last-one-rich/
 │   └── make_audio.py               #   all SFX + music loop (WAV)   -> content/sfx/*.wav
 ├── content/                        # all data-driven content (copied to output, no .mgcb)
 │   ├── data/
-│   │   ├── season.json             # rounds, twist pools, cash-out offers, grand prize
-│   │   ├── economy.json            # payout formula params
-│   │   ├── bots.json               # rival names, colors, personality weights
-│   │   ├── twists.json             # modifiers + validator caps
-│   │   └── levels/level01.json     # geometry, hazards, spawns, waypoints, elimination rule
-│   ├── cutscenes/intro.json        # timeline beats (camera/subtitle/overlay/audio/event)
+│   │   ├── season.json             # 12 rounds, twist pools, cash-out offers, grand prize
+│   │   ├── economy.json            # payout formula params + auction items
+│   │   ├── bots.json               # rivals + fillNames/fillCount (24-strong cast)
+│   │   ├── twists.json             # modifiers + validator caps (belt/wind/hammer/slime/ice/drone/timer)
+│   │   ├── controls.json           # remappable keybinds
+│   │   └── levels/level01..12.json # one JSON per round (round 10 = auction, no file)
+│   ├── cutscenes/intro_template.json # tokenized beats ({ROUND_NUM}, {MODE_OBJ}, cameraOrbit…)
 │   ├── gfx/  sfx/                  # generated at build-time by tools/
 └── src/
     ├── LastOneRich/
@@ -134,6 +188,9 @@ last-one-rich/
   `Texture2D.FromStream`; WAVs via `SoundEffect.FromStream`. All assets are regenerated
   placeholders — replace `content/gfx/*` and `content/sfx/*` with real art/audio later
   without touching code.
+- **Rendering baseline:** per-face normal vertices + `BasicEffect` directional lighting
+  (ambient + key light), explicit render states per pass (Opaque/AlphaBlend + depth),
+  MSAA (`PreferMultiSampling`), Reach profile for max hardware compatibility.
 - **Collision** is custom AABB with axis-separated resolve *using the min-penetration axis*
   (this exact bug class was found and fixed via the headless harness), step-up ledges,
   ramp height-fields, platform carry.
@@ -151,10 +208,10 @@ last-one-rich/
 | §5 core loop | `States/*` chain |
 | §6 economy/prizes/cash-out | `Season/SeasonRun.cs` (Wallet, payout), `States/BankRisk*`, `CashOut*`, `SeasonEnd*` |
 | §7 characters | `content/data/bots.json` + host/co-host/announcer lines in states & cutscene |
-| §8 Level 1 (+ hooks for 2–12) | `content/data/levels/level01.json` |
-| §9 cutscene timelines | `content/cutscenes/intro.json`, `Cine/CutscenePlayer.cs` |
+| §8 levels 1–12 | `content/data/levels/level0*.json`, `level1*.json` |
+| §9 cutscene timelines | `content/cutscenes/intro_template.json`, `Cine/CutscenePlayer.cs` (tokens + cameraOrbit) |
 | §10 waypoint bots + personalities | `World/WaypointGraph.cs`, `World/BotController.cs` |
-| §11 hazards & elimination | `World/Hazards.cs` (MovingPlatform, RotatorHammer, ConveyorZone, WindCannon, SlimeZone=IceZone-family), `World/RaceTracker.cs` |
+| §11 hazards & elimination | `World/Hazards.cs`, `World/Hazards2.cs` (DroneScanner, IceZone), `World/Modes.cs` + `Elimination.Resolve` (StrikesOut / ScoreRankCut / TopNAdvance / TimeTrialRankCut), `World/RaceTracker.cs` |
 | §12 broadcast HUD | `States/GameplayState.cs` (HUD), `ResultsState` |
 | §13 data-driven content | `World/DTOs.cs`, `Core/Json.cs`, `content/data/**` |
 | §14 AI-created content guardrails | `Season/TwistValidator.cs` + HeadlessSim |
