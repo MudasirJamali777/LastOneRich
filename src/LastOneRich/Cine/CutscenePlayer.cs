@@ -12,6 +12,9 @@ public sealed class CutscenePlayer
 {
     readonly List<CutsceneBeatDTO> _beats;
     readonly List<CutsceneBeatDTO> _camKeys = new();
+    readonly List<CutsceneBeatDTO> _orbitKeys = new();
+    readonly Dictionary<string, string> _tokens;
+    readonly float _levelMidZ;
     readonly double _duration;
     float _t;
     int _next;
@@ -24,14 +27,29 @@ public sealed class CutscenePlayer
     public bool ConfettiFired;
     public float PrizePop;
 
-    public CutscenePlayer(CutsceneDTO dto)
+    public CutscenePlayer(CutsceneDTO dto, Dictionary<string, string> tokens = null, float levelMidZ = 100f)
     {
         _beats = dto.Beats.OrderBy(b => b.T).ToList();
         _duration = dto.Duration;
+        _tokens = tokens ?? new Dictionary<string, string>();
+        _levelMidZ = levelMidZ;
         foreach (var b in _beats)
+        {
             if (string.Equals(b.Type, "camera", StringComparison.OrdinalIgnoreCase))
                 _camKeys.Add(b);
+            if (string.Equals(b.Type, "cameraOrbit", StringComparison.OrdinalIgnoreCase))
+                _orbitKeys.Add(b);
+        }
         if (_camKeys.Count > 0) ApplyCam(_camKeys[0], _camKeys[0], 0);
+        else if (_orbitKeys.Count > 0) ApplyOrbit(_orbitKeys[0], 0);
+    }
+
+    string Tok(string s)
+    {
+        if (s == null || _tokens.Count == 0) return s;
+        foreach (var kv in _tokens)
+            s = s.Replace("{" + kv.Key + "}", kv.Value);
+        return s;
     }
 
     public void Update(float dt, AudioBank audio)
@@ -46,8 +64,8 @@ public sealed class CutscenePlayer
             switch ((b.Type ?? "").ToLowerInvariant())
             {
                 case "subtitle":
-                    SubSpeaker = b.Speaker;
-                    SubText = b.Text;
+                    SubSpeaker = Tok(b.Speaker);
+                    SubText = Tok(b.Text);
                     _subUntil = (float)b.T + (float)b.Dur;
                     break;
                 case "overlay":
@@ -71,8 +89,27 @@ public sealed class CutscenePlayer
         if (_t >= _subUntil) { SubText = null; }
         if (_t >= _prizeUntil) ShowPrize = false;
 
-        EvalCamera();
+        if (_orbitKeys.Count > 0) { ApplyOrbitCurrent(); } else { EvalCamera(); }
         if (_t >= _duration) { Done = true; SubText = null; ShowPrize = false; }
+    }
+
+    void ApplyOrbitCurrent()
+    {
+        int i = 0;
+        for (int k = 0; k < _orbitKeys.Count; k++)
+            if (_orbitKeys[k].T <= _t) i = k;
+        ApplyOrbit(_orbitKeys[i], _t - (float)_orbitKeys[i].T);
+    }
+
+    /// <summary>cameraOrbit beat: code-driven slow orbit around the arena mid — works for ANY level.</summary>
+    void ApplyOrbit(CutsceneBeatDTO b, float localT)
+    {
+        float centerZ = b.CenterZ >= 0 ? (float)b.CenterZ : _levelMidZ;
+        float radius = (float)b.Radius, height = (float)b.Height, speed = (float)b.Speed;
+        float ang = speed * localT;
+        Cam.Position = new Vector3(MathF.Sin(ang) * radius, height, centerZ + MathF.Cos(ang) * radius);
+        Cam.LookAt = new Vector3(0, 1.5f, centerZ);
+        Cam.FovDeg = (float)b.Fov;
     }
 
     float _subUntil, _prizeUntil;
