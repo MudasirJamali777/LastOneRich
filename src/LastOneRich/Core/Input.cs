@@ -1,8 +1,13 @@
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
 namespace LastOneRich.Core;
 
-/// <summary>Keyboard + gamepad input with edge detection (GDD section 4/12: controller-friendly).</summary>
+/// <summary>
+/// Keyboard + gamepad input with edge detection.
+/// Keyboard actions are remappable via content/data/controls.json (edit the file, restart).
+/// Gamepad mappings are fixed (A=jump/confirm, X=dive, Start=pause, d-pad=menu).
+/// </summary>
 public static class Input
 {
     static KeyboardState _cur, _prev;
@@ -11,44 +16,54 @@ public static class Input
 
     public static void Update()
     {
+        Keybinds.EnsureLoaded();
         _prev = _cur; _cur = Keyboard.GetState();
-        _gpPrev = _gp; _gp = Microsoft.Xna.Framework.Input.GamePad.GetState(Microsoft.Xna.Framework.PlayerIndex.One);
+        _gpPrev = _gp; _gp = GamePad.GetState(PlayerIndex.One);
     }
 
+    // ---- raw keyboard (rare direct queries) ----
     public static bool Held(params Keys[] keys) { foreach (var k in keys) if (_cur.IsKeyDown(k)) return true; return false; }
     public static bool Pressed(params Keys[] keys) { foreach (var k in keys) if (_cur.IsKeyDown(k) && !_prev.IsKeyDown(k)) return true; return false; }
 
-    static bool GpPressed(Buttons b) => _gp.IsButtonDown(b) && !_gpPrev.IsButtonDown(b);
-    static bool GpHeld(Buttons b) => _gp.IsButtonDown(b);
+    // ---- remappable actions ----
+    public static bool HeldAction(string action) => Keybinds.Held(_cur, action);
+    public static bool PressedAction(string action) => Keybinds.Pressed(_cur, _prev, action);
 
-    public static Microsoft.Xna.Framework.Vector2 Move
+    static bool GpPressed(Buttons b) => _gp.IsButtonDown(b) && !_gpPrev.IsButtonDown(b);
+
+    /// <summary>
+    /// Raw move intent in SCREEN space: +X = screen-right, +Y = screen-forward/away.
+    /// GameplayState resolves this into world-space XZ using the camera basis
+    /// (see GameplayState.ResolveMove) — never feed this straight into the world.
+    /// </summary>
+    public static Vector2 Move
     {
         get
         {
             float x = 0, y = 0;
-            if (Held(Keys.A, Keys.Left)) x -= 1;
-            if (Held(Keys.D, Keys.Right)) x += 1;
-            if (Held(Keys.W, Keys.Up)) y += 1;
-            if (Held(Keys.S, Keys.Down)) y -= 1;
+            if (HeldAction("MoveLeft")) x -= 1;
+            if (HeldAction("MoveRight")) x += 1;
+            if (HeldAction("MoveForward")) y += 1;
+            if (HeldAction("MoveBack")) y -= 1;
             var st = _gp.ThumbSticks.Left;
             if (System.MathF.Abs(st.X) > Deadzone) x += st.X;
             if (System.MathF.Abs(st.Y) > Deadzone) y += st.Y;
-            var v = new Microsoft.Xna.Framework.Vector2(x, y);
+            var v = new Vector2(x, y);
             if (v.LengthSquared() > 1f) v.Normalize();
             return v;
         }
     }
 
-    public static bool JumpPressed => Pressed(Keys.Space) || GpPressed(Buttons.A);
-    public static bool DivePressed => Pressed(Keys.LeftShift, Keys.RightShift) || GpPressed(Buttons.X);
-    public static bool ConfirmPressed => Pressed(Keys.Enter, Keys.Space) || GpPressed(Buttons.A);
-    public static bool BackPressed => Pressed(Keys.Escape) || GpPressed(Buttons.B);
-    public static bool PausePressed => Pressed(Keys.Escape) || GpPressed(Buttons.Start);
-    public static bool UpPressed => Pressed(Keys.W, Keys.Up) || GpPressed(Buttons.DPadUp);
-    public static bool DownPressed => Pressed(Keys.S, Keys.Down) || GpPressed(Buttons.DPadDown);
-    public static bool LeftPressed => Pressed(Keys.A, Keys.Left) || GpPressed(Buttons.DPadLeft);
-    public static bool RightPressed => Pressed(Keys.D, Keys.Right) || GpPressed(Buttons.DPadRight);
+    public static bool JumpPressed => PressedAction("Jump") || GpPressed(Buttons.A);
+    public static bool DivePressed => PressedAction("Dive") || GpPressed(Buttons.X);
+    public static bool ConfirmPressed => PressedAction("Confirm") || GpPressed(Buttons.A);
+    public static bool BackPressed => PressedAction("Pause") || GpPressed(Buttons.B);
+    public static bool PausePressed => PressedAction("Pause") || GpPressed(Buttons.Start);
+    public static bool UpPressed => PressedAction("MoveForward") || GpPressed(Buttons.DPadUp);
+    public static bool DownPressed => PressedAction("MoveBack") || GpPressed(Buttons.DPadDown);
+    public static bool LeftPressed => PressedAction("MoveLeft") || GpPressed(Buttons.DPadLeft);
+    public static bool RightPressed => PressedAction("MoveRight") || GpPressed(Buttons.DPadRight);
     public static bool Num1Pressed => Pressed(Keys.D1, Keys.NumPad1) || GpPressed(Buttons.LeftShoulder);
     public static bool Num2Pressed => Pressed(Keys.D2, Keys.NumPad2) || GpPressed(Buttons.RightShoulder);
-    public static bool SkipPressed => Pressed(Keys.Enter, Keys.Space, Keys.E) || GpPressed(Buttons.A);
+    public static bool SkipPressed => PressedAction("Confirm") || GpPressed(Buttons.A);
 }

@@ -4,6 +4,7 @@ namespace LastOneRich.World;
 
 public struct InputState
 {
+    /// <summary>World-space XZ move direction (already camera-resolved by GameplayState).</summary>
     public Vector2 Move;
     public bool Jump;
     public bool Dive;

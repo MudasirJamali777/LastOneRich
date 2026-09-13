@@ -10,6 +10,12 @@ public class Camera3D
     public float FovDeg = 62f;
 
     public Matrix View => Matrix.CreateLookAt(Position, LookAt, Vector3.Up);
+
+    /// <summary>Camera right axis in world space — the direction that appears as screen-right.</summary>
+    public Vector3 RightDir => Vector3.Normalize(new Vector3(View.M11, View.M12, View.M13));
+
+    /// <summary>Camera forward axis in world space — where the screen center points.</summary>
+    public Vector3 ForwardDir => Vector3.Normalize(-new Vector3(View.M31, View.M32, View.M33));
     public Matrix Projection(float aspect) =>
         Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(FovDeg), aspect, 0.1f, 700f);
 

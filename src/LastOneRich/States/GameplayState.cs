@@ -40,7 +40,26 @@ public sealed class GameplayState : IGameState
 
     int _roundNo, _roundTotal;
 
+    // Debug overlay data (F3): raw screen intent vs resolved world XZ.
+    public static Vector2 DebugMoveRaw = Vector2.Zero;
+    public static Vector2 DebugMoveXZ = Vector2.Zero;
+
     public GameplayState(StateMachine sm, SeasonRun season) { _sm = sm; _season = season; }
+
+    Vector2 ResolveMove(Vector2 raw)
+    {
+        if (raw.LengthSquared() < 0.001f) return Vector2.Zero;
+        var right = _cam.RightDir; right.Y = 0f;
+        if (right.LengthSquared() < 0.0001f) right = new Vector3(1f, 0f, 0f);
+        right.Normalize();
+        var fwd = _cam.ForwardDir; fwd.Y = 0f;
+        if (fwd.LengthSquared() < 0.0001f) fwd = new Vector3(0f, 0f, 1f);
+        fwd.Normalize();
+        var w = right * raw.X + fwd * raw.Y;
+        if (w.LengthSquared() < 0.0001f) return Vector2.Zero;
+        w.Normalize();
+        return new Vector2(w.X, w.Z);
+    }
 
     public void Enter()
     {
@@ -130,9 +149,16 @@ public sealed class GameplayState : IGameState
             var p = _actors[0];
             if (!p.Finished)
             {
+                // Camera-relative movement: raw keys/stick are screen-space intent,
+                // resolved into world XZ via the chase camera's flattened basis.
+                // This keeps A = screen-left and D = screen-right at every yaw.
+                var raw = Input.Move;
+                DebugMoveRaw = raw;
+                var mv = ResolveMove(raw);
+                DebugMoveXZ = mv;
                 var inp = new InputState
                 {
-                    Move = Input.Move,
+                    Move = mv,
                     Jump = Input.JumpPressed,
                     Dive = Input.DivePressed,
                 };

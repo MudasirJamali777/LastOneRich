@@ -1,0 +1,11 @@
+{
+  "moveLeft": ["A", "Left"],
+  "moveRight": ["D", "Right"],
+  "moveForward": ["W", "Up"],
+  "moveBack": ["S", "Down"],
+  "jump": ["Space"],
+  "dive": ["LeftShift", "RightShift"],
+  "confirm": ["Enter", "Space", "E"],
+  "pause": ["Escape"],
+  "debugOverlay": ["F3"]
+}
