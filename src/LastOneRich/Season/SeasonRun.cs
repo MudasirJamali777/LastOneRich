@@ -48,6 +48,9 @@ public sealed class SeasonRun
     public Wallet Wallet = new();
     public int RoundIdx;
     public TwistDTO ActiveTwist;
+    public readonly HashSet<string> Upgrades = new();   // auction advantages (GDD L10)
+    public bool ConsumeUpgrade(string id) { if (Upgrades.Remove(id)) { System.Console.WriteLine($"[upgrade] consumed {id}"); return true; } return false; }
+    public string SabotageFlavor = "";
     public Level CurrentLevel;
     public RaceTracker Tracker;
 
@@ -86,6 +89,29 @@ public sealed class SeasonRun
                 Personality = b.Personality,
             });
         }
+
+        // fill bots (bots.json "fillCount"/"fillNames") — seeded, deterministic roster size
+        var rng = new Random(20260913);
+        Color[] palette = { new(0xff, 0x8a, 0x3d), new(0x4d, 0xff, 0xc3), new(0xf8, 0x4f, 0x4f), new(0x9d, 0x6b, 0xff),
+                            new(0x3f, 0xe0, 0xb0), new(0xff, 0x6b, 0xd8), new(0x7f, 0xd4, 0xff), new(0xd4, 0xff, 0x6b) };
+        for (int i = 0; i < Bots.FillCount; i++)
+        {
+            string name = i < Bots.FillNames.Count ? Bots.FillNames[i] : $"R-{i + 2:00}";
+            Cast.Add(new Contestant
+            {
+                Name = name,
+                Color = palette[i % palette.Length],
+                Personality = new PersonalityDTO
+                {
+                    RiskTolerance = 0.15 + rng.NextDouble() * 0.8,
+                    Aggression = rng.NextDouble() * 0.85,
+                    PuzzleSkill = 0.2 + rng.NextDouble() * 0.75,
+                    RouteGreed = 0.15 + rng.NextDouble() * 0.75,
+                    Pace = 0.94 + rng.NextDouble() * 0.09,
+                    SpendStyle = new[] { "Saver", "Buyer", "Saboteur" }[rng.Next(3)],
+                },
+            });
+        }
     }
 
     public TwistDTO TwistById(string id) => Twists.Twists.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -113,16 +139,53 @@ public static class TwistValidator
 
         foreach (var round in run.Season.Rounds)
         {
+            if (round.Level == "none" || round.Level == "auction")
+            {
+                // intermission rounds carry no level payload
+                continue;
+            }
             try
             {
                 var lvl = Json.Load<LevelDTO>($"data/levels/{round.Level}.json");
                 if (lvl.TimeLimit < 30) errors.Add($"round {round.Round}: timeLimit {lvl.TimeLimit} < 30");
-                if (lvl.Elimination.Percent < 1 || lvl.Elimination.Percent > 50)
+                if (lvl.Elimination.Percent < 0 || lvl.Elimination.Percent > 50)
                     errors.Add($"round {round.Round}: elimination percent out of bounds");
-                if (lvl.Type == "Race" && lvl.Elimination.Rule != "TimeTrialRankCut")
-                    errors.Add($"round {round.Round}: elimination rule doesn't match level type");
-                if (lvl.Spawns.Length < run.Season.Contestants)
-                    errors.Add($"round {round.Round}: level has fewer spawns than contestants");
+
+                var validRules = new[] { "TimeTrialRankCut", "ScoreRankCut", "LastNStanding", "StrikesOut", "TeamCut", "TopNAdvance", "NoElimination" };
+                if (!validRules.Contains(lvl.Elimination.Rule))
+                    errors.Add($"round {round.Round}: unknown elimination rule '{lvl.Elimination.Rule}'");
+
+                switch (lvl.Type)
+                {
+                    case "Race":
+                        if (lvl.Elimination.Rule != "TimeTrialRankCut" && lvl.Elimination.Rule != "TopNAdvance")
+                            errors.Add($"round {round.Round}: elimination rule doesn't match Race");
+                        if (lvl.Finish == null) errors.Add($"round {round.Round}: race level has no finish");
+                        break;
+                    case "SurvivalZone":
+                        if (lvl.SafeZone == null) errors.Add($"round {round.Round}: SurvivalZone has no safe zone");
+                        if (lvl.Elimination.Rule != "ScoreRankCut") errors.Add($"round {round.Round}: SurvivalZone expects ScoreRankCut");
+                        break;
+                    case "StrikesOut":
+                        if (lvl.Drones.Count == 0) errors.Add($"round {round.Round}: StrikesOut has no drones");
+                        break;
+                    case "ScoreCollect":
+                        if (lvl.Vault == null || lvl.Deposit == null) errors.Add($"round {round.Round}: ScoreCollect missing vault/deposit");
+                        break;
+                    case "FinaleButton":
+                        if (lvl.Button == null) errors.Add($"round {round.Round}: FinaleButton has no button");
+                        break;
+                    case "Auction":
+                        break;
+                    default:
+                        errors.Add($"round {round.Round}: unknown level type '{lvl.Type}' (falling back to Race at runtime)");
+                        break;
+                }
+
+                int spawnCount = lvl.Spawns.Length;
+                if (lvl.SpawnGrid != null) spawnCount = 32;
+                if (spawnCount < run.Cast.Count)
+                    errors.Add($"round {round.Round}: level has fewer spawns ({spawnCount}) than contestants ({run.Cast.Count})");
             }
             catch (Exception e)
             {

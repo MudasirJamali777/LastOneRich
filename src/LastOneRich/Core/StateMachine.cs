@@ -32,11 +32,16 @@ public sealed class StateMachine
 
     void ApplyPending()
     {
-        if (_pending == null) return;
-        _current?.Exit();
-        _current = _pending;
-        _pending = null;
-        _current.Enter();
+        // A state's Enter() may Replace() again (e.g. an auction round redirects
+        // GameplayState -> AuctionState); apply the whole chain before returning.
+        while (_pending != null)
+        {
+            var next = _pending;
+            _pending = null;
+            _current?.Exit();
+            _current = next;
+            _current.Enter();
+        }
     }
 
     public void Draw() => _current?.Draw();

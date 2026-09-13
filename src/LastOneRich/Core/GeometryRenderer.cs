@@ -3,9 +3,34 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace LastOneRich.Core;
 
+/// <summary>Position + normal + color vertex: lets BasicEffect do real directional lighting.</summary>
+public struct VertexPositionNormalColor : IVertexType
+{
+    public Vector3 Position;
+    public Vector3 Normal;
+    public Color Color;
+
+    public static readonly VertexDeclaration VertexDeclaration = new(
+        new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
+        new VertexElement(12, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0),
+        new VertexElement(24, VertexElementFormat.Color, VertexElementUsage.Color, 0));
+
+    VertexDeclaration IVertexType.VertexDeclaration => VertexDeclaration;
+
+    public VertexPositionNormalColor(Vector3 position, Vector3 normal, Color color)
+    {
+        Position = position;
+        Normal = normal;
+        Color = color;
+    }
+}
+
 /// <summary>
-/// Immediate-style 3D batcher for the MVP "primitives only" art style (GDD 13.2/16):
-/// boxes + ramps as vertex-color triangles drawn with BasicEffect. No models, no pipeline.
+/// Immediate-style 3D batcher for the MVP "primitives only" art style (GDD 13.2/16).
+/// Rendering baseline: per-face normals + BasicEffect directional lighting + fog,
+/// explicit render states per pass (Opaque/AlphaBlend, depth tested), MSAA from the
+/// GraphicsDeviceManager. Culling stays OFF on purpose: faces are hand-wound for the
+/// toy look and this is not a perf bottleneck at slice scale.
 /// </summary>
 public sealed class GeometryRenderer
 {
@@ -13,9 +38,9 @@ public sealed class GeometryRenderer
 
     readonly GraphicsDevice _gd;
     readonly BasicEffect _fx;
-    readonly RasterizerState _raster = new() { CullMode = CullMode.None };
-    readonly List<VertexPositionColor> _opaque = new(InitialVerts);
-    readonly List<VertexPositionColor> _alpha = new(4096);
+    readonly RasterizerState _raster = new() { CullMode = CullMode.None }; // documented: hand-wound faces
+    readonly List<VertexPositionNormalColor> _opaque = new(InitialVerts);
+    readonly List<VertexPositionNormalColor> _alpha = new(4096);
     VertexBuffer _vb;
     int _vbCap;
 
@@ -26,13 +51,19 @@ public sealed class GeometryRenderer
         {
             World = Matrix.Identity,
             VertexColorEnabled = true,
-            LightingEnabled = false,
             TextureEnabled = false,
             FogEnabled = true,
             FogColor = new Vector3(0.075f, 0.08f, 0.16f),
             FogStart = 150f,
             FogEnd = 460f,
         };
+        // Real lighting (replaces the heavy baked face shading — only mild tint variety remains).
+        _fx.LightingEnabled = true;
+        _fx.AmbientLightColor = new Vector3(0.46f, 0.47f, 0.52f);
+        _fx.DirectionalLight0.Enabled = true;
+        _fx.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.45f, -1f, -0.35f));
+        _fx.DirectionalLight0.DiffuseColor = new Vector3(0.78f, 0.76f, 0.72f);
+        _fx.DirectionalLight0.SpecularColor = Vector3.Zero;
     }
 
     public void BeginFrame(Camera3D cam, float aspect, Color sky)
@@ -46,17 +77,20 @@ public sealed class GeometryRenderer
 
     // ---------- emit helpers ----------
 
-    static void Face(List<VertexPositionColor> list, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
+    static void Face(List<VertexPositionNormalColor> list, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
     {
-        list.Add(new VertexPositionColor(a, col));
-        list.Add(new VertexPositionColor(b, col));
-        list.Add(new VertexPositionColor(c, col));
-        list.Add(new VertexPositionColor(a, col));
-        list.Add(new VertexPositionColor(c, col));
-        list.Add(new VertexPositionColor(d, col));
+        var n = Vector3.Cross(b - a, c - a);
+        if (n.LengthSquared() < 0.000001f) n = new Vector3(0, 1, 0);
+        else n.Normalize();
+        var v0 = new VertexPositionNormalColor(a, n, col);
+        var v1 = new VertexPositionNormalColor(b, n, col);
+        var v2 = new VertexPositionNormalColor(c, n, col);
+        var v3 = new VertexPositionNormalColor(d, n, col);
+        list.Add(v0); list.Add(v1); list.Add(v2);
+        list.Add(v0); list.Add(v2); list.Add(v3);
     }
 
-    /// <summary>Axis-aligned box. Sides get slight shade variance for the toy look.</summary>
+    /// <summary>Axis-aligned box. Mild per-side tint for readability; real shading comes from lighting.</summary>
     public void Box(Vector3 center, Vector3 size, Color c)
     {
         var h = size * 0.5f;
@@ -82,8 +116,8 @@ public sealed class GeometryRenderer
                 for (int sx = 0; sx < 2; sx++)
                     p[i++] = P(sx == 0 ? -h.X : h.X, sy == 0 ? -h.Y : h.Y, sz == 0 ? -h.Z : h.Z);
 
-        var fT = ColorUtil.Shade(c, 1.0f); var fB = ColorUtil.Shade(c, 0.55f);
-        var fX = ColorUtil.Shade(c, 0.82f); var fZ = ColorUtil.Shade(c, 0.72f);
+        var fT = ColorUtil.Shade(c, 1.0f); var fB = ColorUtil.Shade(c, 0.62f);
+        var fX = ColorUtil.Shade(c, 0.92f); var fZ = ColorUtil.Shade(c, 0.84f);
         var L = _opaque;
         // corners: 0:(-x,-y,-z) 1:(x,-y,-z) 2:(-x,y,-z) 3:(x,y,-z) 4:(-x,-y,z) 5:(x,-y,z) 6:(-x,y,z) 7:(x,y,z)
         Face(L, p[4], p[5], p[7], p[6], fZ);       // +z
@@ -94,7 +128,7 @@ public sealed class GeometryRenderer
         Face(L, p[0], p[1], p[5], p[4], fB);       // -y
     }
 
-    static void EmitCuboid(List<VertexPositionColor> L, Vector3 l, Vector3 u, Color c)
+    static void EmitCuboid(List<VertexPositionNormalColor> L, Vector3 l, Vector3 u, Color c)
     {
         var a = new Vector3(l.X, l.Y, l.Z);
         var b = new Vector3(u.X, l.Y, l.Z);
@@ -104,8 +138,8 @@ public sealed class GeometryRenderer
         var g = new Vector3(u.X, u.Y, l.Z);
         var h = new Vector3(l.X, u.Y, u.Z);
         var i2 = new Vector3(u.X, u.Y, u.Z);
-        var fT = ColorUtil.Shade(c, 1.0f); var fB = ColorUtil.Shade(c, 0.55f);
-        var fX = ColorUtil.Shade(c, 0.82f); var fZ = ColorUtil.Shade(c, 0.72f);
+        var fT = ColorUtil.Shade(c, 1.0f); var fB = ColorUtil.Shade(c, 0.62f);
+        var fX = ColorUtil.Shade(c, 0.92f); var fZ = ColorUtil.Shade(c, 0.84f);
         Face(L, d, e, i2, h, fZ);
         Face(L, b, a, f, g, fZ);
         Face(L, e, b, g, i2, fX);
@@ -125,9 +159,9 @@ public sealed class GeometryRenderer
         if (dirZ != 0) // rise along Z
         {
             if (dirZ < 0) { (z0, z1) = (z1, z0); }
-            var slope = ColorUtil.Shade(c, 0.95f);
-            var side = ColorUtil.Shade(c, 0.7f);
-            var back = ColorUtil.Shade(c, 0.6f);
+            var slope = ColorUtil.Shade(c, 0.97f);
+            var side = ColorUtil.Shade(c, 0.8f);
+            var back = ColorUtil.Shade(c, 0.72f);
             var A = new Vector3(x0, y0, z0);
             var B = new Vector3(x1, y0, z0);
             var C = new Vector3(x1, y1, z1);
@@ -145,8 +179,8 @@ public sealed class GeometryRenderer
         {
             if (dirX < 0) { (x0, x1) = (x1, x0); }
             var slope = ColorUtil.Shade(c, 0.9f);
-            var side = ColorUtil.Shade(c, 0.7f);
-            var back = ColorUtil.Shade(c, 0.6f);
+            var side = ColorUtil.Shade(c, 0.8f);
+            var back = ColorUtil.Shade(c, 0.72f);
             var A = new Vector3(x0, y0, z0);
             var B = new Vector3(x0, y0, z1);
             var C = new Vector3(x1, y1, z1);
@@ -193,7 +227,7 @@ public sealed class GeometryRenderer
         if (_alpha.Count > 0) Flush(_alpha, BlendState.AlphaBlend, DepthStencilState.DepthRead);
     }
 
-    void Flush(List<VertexPositionColor> verts, BlendState blend, DepthStencilState depth)
+    void Flush(List<VertexPositionNormalColor> verts, BlendState blend, DepthStencilState depth)
     {
         int count = verts.Count;
         int tris = count / 3;
@@ -201,12 +235,13 @@ public sealed class GeometryRenderer
         {
             _vbCap = System.Math.Max(InitialVerts, count * 2);
             _vb?.Dispose();
-            _vb = new VertexBuffer(_gd, VertexPositionColor.VertexDeclaration, _vbCap, BufferUsage.WriteOnly);
+            _vb = new VertexBuffer(_gd, VertexPositionNormalColor.VertexDeclaration, _vbCap, BufferUsage.WriteOnly);
         }
         var arr = verts.ToArray();
         _vb.SetData(arr, 0, count);
         var oldBlend = _gd.BlendState; var oldDepth = _gd.DepthStencilState; var oldRaster = _gd.RasterizerState;
         _gd.BlendState = blend; _gd.DepthStencilState = depth; _gd.RasterizerState = _raster;
+        _gd.SamplerStates[0] = SamplerState.AnisotropicClamp;
         _gd.SetVertexBuffer(_vb);
         foreach (var pass in _fx.CurrentTechnique.Passes)
         {
