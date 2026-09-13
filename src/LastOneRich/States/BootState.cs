@@ -20,7 +20,7 @@ public sealed class BootState : IGameState
         if (gotoArg == "game")
         {
             var run = Season.SeasonRun.Create();
-            run.RoundIdx = 0;
+            run.RoundIdx = System.Math.Clamp(GameServices.Launch?.Round ?? 1, 1, run.Season.Rounds.Count) - 1;
             _sm.Replace(new GameplayState(_sm, run));
             return;
         }

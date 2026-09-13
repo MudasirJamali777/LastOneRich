@@ -48,6 +48,12 @@ public sealed class ArenaBackdrop
     public void Draw()
     {
         var vp = GameServices.Gfx.Viewport;
+        if (Level == null)
+        {
+            // auction intermission (and any level-less round): simple dome void backdrop
+            GameServices.Gfx.Clear(new Color(16, 12, 34));
+            return;
+        }
         GameServices.Gfx.Clear(Level.SkyColor);
         var r = GameServices.Renderer;
         r.BeginFrame(_cam, vp.Width / (float)vp.Height, Level.SkyColor);

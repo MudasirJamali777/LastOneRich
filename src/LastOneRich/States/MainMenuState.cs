@@ -124,6 +124,7 @@ public sealed class MainMenuState : IGameState
             "MOVE .......... WASD / ARROWS / LEFT STICK",
             "JUMP .......... SPACE / A",
             "DIVE .......... SHIFT / X  (burst dash with cooldown)",
+            "F3 ............ DEBUG OVERLAY (FPS, move vector)",
             "",
             "Survive each episode. The BOTTOM 20% of the field",
             "is ELIMINATED at the results ceremony.",

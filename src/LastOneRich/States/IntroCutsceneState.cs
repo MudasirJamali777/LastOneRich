@@ -22,12 +22,44 @@ public sealed class IntroCutsceneState : IGameState
 
     public void Enter()
     {
-        var levelId = _season.Season.Rounds[0].Level;
-        _level = Level.Load(levelId, null, n => GameServices.Audio.Event(n));
-        _cut = new CutscenePlayer(Json.Load<CutsceneDTO>("cutscenes/intro.json"));
+        var round = _season.Round;
+        Level level = null;
+        if (round.Level != "none" && round.Level != "auction")
+            level = Level.Load(round.Level, null, n => GameServices.Audio.Event(n));
+        else
+            level = _season.CurrentLevel; // intermission rounds orbit the previous arena
+        _level = level;
+
+        var tokens = new Dictionary<string, string>
+        {
+            ["ROUND_NUM"] = round.Round.ToString(),
+            ["ROUND_TOTAL"] = _season.Season.Rounds.Count.ToString(),
+            ["ROUND_NAME"] = level.Dto.Name,
+            ["MODE_OBJ"] = ObjectiveFor(level.Dto.Type),
+            ["MODE_RULES"] = RulesFor(level.Dto.Type),
+        };
+        _cut = new CutscenePlayer(Json.Load<CutsceneDTO>("cutscenes/intro_template.json"), tokens, level.MidPoint.Z);
         GameServices.Audio.PlayMusic();
         _screen.LetterboxTo(1f);
     }
+
+    static string ObjectiveFor(string type) => type switch
+    {
+        "SurvivalZone" => "STAY IN THE LIGHT!",
+        "StrikesOut" => "DON'T GET SCANNED!",
+        "ScoreCollect" => "STACK THAT PRIZE MONEY!",
+        "FinaleButton" => "TAKE THE BUTTON!",
+        _ => "REACH THE FINISH!",
+    };
+
+    static string RulesFor(string type) => type switch
+    {
+        "SurvivalZone" => "The safe zone shrinks. Worst performers are cut.",
+        "StrikesOut" => "Three scans and security walks you out.",
+        "ScoreCollect" => "Grab at the vault, deposit at the pad. Carrying slows you down.",
+        "FinaleButton" => "Hold the button to drain their scores. Waiting builds your rate. Stamina is finite.",
+        _ => "Bottom of the field gets cut. Simple. Brutal. Ratings.",
+    };
 
     public void Exit() { }
 

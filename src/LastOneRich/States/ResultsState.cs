@@ -49,7 +49,21 @@ public sealed class ResultsState : IGameState
     {
         _bg = new ArenaBackdrop(_season.CurrentLevel);
 
-        var elimSet = RaceTracker.Eliminate(_ranking, _season.Tracker.ElimPercent);
+        var elimSet = Elimination.Resolve(_season.Tracker, _season.CurrentLevel, _ranking);
+        // upgrades: golden ticket revives the player once; extra life survives one cut
+        if (elimSet.Any(a => a.IsPlayer))
+        {
+            if (_season.ConsumeUpgrade("golden_ticket") && _season.RoundIdx < _season.Season.Rounds.Count - 1)
+            {
+                elimSet = elimSet.Where(a => !a.IsPlayer).ToList();
+                foreach (var c in _season.Cast) { if (c.IsPlayer) c.Eliminated = false; }
+            }
+            else if (_season.ConsumeUpgrade("extra_life"))
+            {
+                elimSet = elimSet.Where(a => !a.IsPlayer).ToList();
+                foreach (var c in _season.Cast) { if (c.IsPlayer) c.Eliminated = false; }
+            }
+        }
         int rank = 1;
         foreach (var a in _ranking)
         {
@@ -58,7 +72,7 @@ public sealed class ResultsState : IGameState
                 Rank = rank,
                 Name = a.Name,
                 Color = a.Color,
-                Status = a.Finished ? a.FinishTime.ToString("0.0") + "s" : "DNF",
+                Status = Elimination.StatusFor(a, _season.CurrentLevel),
                 IsPlayer = a.IsPlayer,
                 Eliminated = elimSet.Contains(a),
             });
@@ -141,8 +155,11 @@ public sealed class ResultsState : IGameState
                 _sm.Replace(new SeasonEndState(_sm, _season, SeasonEndState.Outcome.Eliminated, 0, _playerRank));
             else if (_season.IsFinalRound)
             {
-                _season.Wallet.ChooseBank(); // finale: everything banks, plus the grand prize
-                _sm.Replace(new SeasonEndState(_sm, _season, SeasonEndState.Outcome.Champion));
+                _season.Wallet.ChooseBank(); // finale: everything banks
+                if (_playerRank == 1)
+                    _sm.Replace(new SeasonEndState(_sm, _season, SeasonEndState.Outcome.Champion));
+                else
+                    _sm.Replace(new SeasonEndState(_sm, _season, SeasonEndState.Outcome.Eliminated, 0, _playerRank));
             }
             else
                 _sm.Replace(new BankRiskState(_sm, _season));

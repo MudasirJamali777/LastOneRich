@@ -64,6 +64,12 @@ public sealed class GameplayState : IGameState
     public void Enter()
     {
         var round = _season.Round;
+        if (string.Equals(round.Level, "none", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(round.Level, "auction", StringComparison.OrdinalIgnoreCase))
+        {
+            _sm.Replace(new AuctionState(_sm, _season));
+            return;
+        }
         var twists = _season.ActiveTwist != null ? new List<TwistDTO> { _season.ActiveTwist } : null;
         if (_season.ActiveTwist != null)
         {
@@ -94,6 +100,8 @@ public sealed class GameplayState : IGameState
 
         _tracker = new RaceTracker(_actors, _lv);
         _season.Tracker = _tracker;
+        if (_season.Upgrades.Contains("shield"))
+            _lv.ShieldHook = a => a.IsPlayer && _season.ConsumeUpgrade("shield");
 
         _roundNo = _season.RoundIdx + 1;
         _roundTotal = _season.Season.Rounds.Count;
@@ -127,6 +135,7 @@ public sealed class GameplayState : IGameState
 
         if (_phase == Phase.Countdown)
         {
+            if (_lv == null) return; // auction redirect pending — never tick a level-less round
             _lv.Update(dt, _actors); // scenery keeps moving during the countdown
             int n = (int)MathF.Ceiling(CountTime - _phaseT - 0.6f);
             if (n != _lastCount && n >= 1 && n <= 3) { _lastCount = n; GameServices.Audio.Event("blip"); }
@@ -176,12 +185,20 @@ public sealed class GameplayState : IGameState
                 _bots[bi++].Update(a, _lv, dt, _actors);
             }
 
-            if (p.Finished && !_celebrated)
+            Modes.UpdateRound(_lv, _actors, _tracker, dt);
+
+            if (_lv.Dto.Type == "Race" && p.Finished && !_celebrated)
             {
                 _celebrated = true;
                 _fx.ConfettiBurst(new Vector2(640, 240), 130);
                 GameServices.Audio.Event("stinger_win");
                 _finishBanner = $"FINISHED — {Ui.Ordinal(_tracker.LiveRank(p))}  ·  {p.FinishTime:0.0}s";
+            }
+            if (p.RoundOut && !_celebrated)
+            {
+                _celebrated = true;
+                GameServices.Audio.Event("stinger_elim");
+                _finishBanner = _lv.Dto.Type == "StrikesOut" ? "3 STRIKES — YOU'RE OUT!" : "ELIMINATED FROM THE ROUND";
             }
         }
         else
@@ -294,7 +311,7 @@ public sealed class GameplayState : IGameState
         string round = $"ROUND {_roundNo}/{_roundTotal} — {_lv.Dto.Name}";
         var rs = f.Measure(round, 0.8f);
         f.DrawOutlined(sb, round, new Vector2(640, 16), Color.White, 0.8f, 0f, new Vector2(rs.X / 2, 0));
-        string objective = $"REACH THE FINISH  ·  BOTTOM {_lv.Dto.Elimination.Percent:0}% ELIMINATED";
+        string objective = ObjectiveText();
         var os = f.Measure(objective, 0.5f);
         f.Draw(sb, objective, new Vector2(640, 52), new Color(63, 210, 255), 0.5f, 0f, new Vector2(os.X / 2, 0), true);
         if (_season.ActiveTwist != null)
@@ -322,6 +339,41 @@ public sealed class GameplayState : IGameState
             if (a.Finished) line += "  OK";
             f.Draw(sb, line, new Vector2(1076, y), col, 0.52f, 0f, Vector2.Zero, !a.IsPlayer);
             y += 30;
+        }
+
+        // mode-specific player status (GDD §12 HUD)
+        var pl = _actors[0];
+        float hx = 18, hy = 70;
+        if (_lv.Dto.Type == "StrikesOut")
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                bool lit = pl.Strikes > i;
+                Ui.Rect(new Vector2(hx + i * 34, hy), new Vector2(28, 28), lit ? new Color(255, 70, 70) : new Color(16, 18, 32, 220));
+                Ui.Frame(new Rectangle((int)hx + i * 34, (int)hy, 28, 28), 2, lit ? Color.White : new Color(60, 66, 90));
+                f.Draw(sb, "!", new Vector2(hx + i * 34 + 9, hy + 3), lit ? Color.White : new Color(90, 96, 120), 0.7f);
+            }
+        }
+        if (_lv.Dto.Type == "ScoreCollect")
+        {
+            string carry = $"BLOCKS {pl.Carrying}/{_lv.Dto.CarryCap}   BANKED {Ui.Money(pl.Score)}";
+            Ui.Rect(new Vector2(hx, hy), new Vector2(320, 34), new Color(8, 8, 18, 190));
+            f.Draw(sb, carry, new Vector2(hx + 10, hy + 6), new Color(255, 235, 150), 0.6f);
+        }
+        if (_lv.Dto.Type == "SurvivalZone")
+        {
+            bool safe = pl.OnButton;
+            string st = safe ? "IN THE ZONE" : "OUTSIDE — GET BACK!";
+            var col = safe ? new Color(141, 255, 63) : new Color(255, 70, 70);
+            Ui.Rect(new Vector2(hx, hy), new Vector2(280, 34), new Color(8, 8, 18, 190));
+            f.Draw(sb, $"{st}  {pl.Score:0}s", new Vector2(hx + 10, hy + 6), col, 0.6f);
+        }
+        if (_lv.Dto.Type == "FinaleButton")
+        {
+            Ui.Rect(new Vector2(hx, hy), new Vector2(260, 40), new Color(8, 8, 18, 190));
+            f.Draw(sb, pl.OnButton ? "ON THE BUTTON!" : $"RATE ×{1 + pl.WaitTime * 0.08:0.0}", new Vector2(hx + 10, hy + 4), pl.OnButton ? new Color(255, 90, 90) : new Color(141, 255, 63), 0.6f);
+            Ui.Rect(new Vector2(hx + 10, hy + 26), new Vector2(240, 8), new Color(30, 34, 50));
+            Ui.Rect(new Vector2(hx + 10, hy + 26), new Vector2((float)(240 * System.Math.Clamp(pl.Stamina / 100.0, 0, 1)), 8), new Color(63, 210, 255));
         }
 
         // wallet (bottom-left)
@@ -352,6 +404,15 @@ public sealed class GameplayState : IGameState
             f.Draw(sb, "▼", sp, new Color(255, 71, 71), 0.6f, 0f, new Vector2(f.Measure("▼", 0.6f).X / 2, 0));
         }
     }
+
+    string ObjectiveText() => _lv.Dto.Type switch
+    {
+        "SurvivalZone" => $"STAY IN THE GOLD ZONE  ·  BOTTOM {_lv.Dto.Elimination.Percent:0}% OUT",
+        "StrikesOut" => "DODGE THE DRONES  ·  3 STRIKES AND YOU'RE OUT",
+        "ScoreCollect" => "GRAB AT THE ORANGE VAULT  ·  DEPOSIT AT THE GREEN PAD",
+        "FinaleButton" => "HOLD THE BUTTON TO DRAIN RIVALS  ·  WAITING BUILDS YOUR RATE",
+        _ => $"REACH THE FINISH  ·  BOTTOM {_lv.Dto.Elimination.Percent:0}% ELIMINATED",
+    };
 
     void DrawCountdown(BitmapFont f, Microsoft.Xna.Framework.Graphics.SpriteBatch sb)
     {
