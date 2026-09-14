@@ -90,7 +90,7 @@
     1,
     20
    ],
-   "color": "#2ee6a8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -118,7 +118,7 @@
     2.2,
     40.8
    ],
-   "color": "#ff5c5c"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -132,7 +132,7 @@
     2.2,
     40.8
    ],
-   "color": "#ff5c5c"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -146,7 +146,7 @@
     1,
     60
    ],
-   "color": "#ff9d2e"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -160,7 +160,7 @@
     0.9,
     60
    ],
-   "color": "#c97a1e"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -174,7 +174,7 @@
     0.9,
     60
    ],
-   "color": "#c97a1e"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -188,7 +188,7 @@
     1.4,
     40.6
    ],
-   "color": "#7ad12e"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -202,7 +202,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -216,7 +216,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -230,7 +230,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -244,7 +244,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -258,7 +258,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -272,7 +272,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -286,7 +286,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -300,7 +300,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -314,7 +314,7 @@
     0.6,
     2.4
    ],
-   "color": "#ffffff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -328,7 +328,7 @@
     1,
     6
    ],
-   "color": "#2ee6a8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -342,7 +342,7 @@
     1,
     30
    ],
-   "color": "#2ee6a8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -356,7 +356,7 @@
     1,
     32
    ],
-   "color": "#3fb8ff"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -370,7 +370,7 @@
     1.2,
     20
    ],
-   "color": "#ffd23f"
+   "color": "#1E1E24"
   },
   {
    "kind": "ramp",
@@ -385,7 +385,7 @@
     3.0
    ],
    "dir": "z+",
-   "color": "#ffd23f"
+   "color": "#FFD700"
   },
   {
    "kind": "ramp",
@@ -400,7 +400,7 @@
     3.0
    ],
    "dir": "z+",
-   "color": "#ffc21f"
+   "color": "#1E1E24"
   },
   {
    "kind": "ramp",
@@ -415,7 +415,7 @@
     3.0
    ],
    "dir": "z+",
-   "color": "#ffc21f"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -486,7 +486,7 @@
     5,
     20
    ],
-   "color": "#1c2030",
+   "color": "#2E2E3E",
    "collide": false
   },
   {
@@ -501,7 +501,7 @@
     5,
     20
    ],
-   "color": "#1c2030",
+   "color": "#2E2E3E",
    "collide": false
   },
   {
@@ -572,7 +572,7 @@
     1,
     6
    ],
-   "color": "#3fb8ff"
+   "color": "#1E1E24"
   }
  ],
  "conveyors": [

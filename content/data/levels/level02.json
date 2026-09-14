@@ -45,7 +45,7 @@
     1,
     40
    ],
-   "color": "#5b4fd8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -59,7 +59,7 @@
     3,
     41
    ],
-   "color": "#2a2660"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -73,7 +73,7 @@
     3,
     41
    ],
-   "color": "#2a2660"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -87,7 +87,7 @@
     3,
     1
    ],
-   "color": "#2a2660"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -101,7 +101,7 @@
     3,
     1
    ],
-   "color": "#2a2660"
+   "color": "#3A3A4A"
   },
   {
    "kind": "box",
@@ -130,7 +130,7 @@
     9,
     1.2
    ],
-   "color": "#ffd23f"
+   "color": "#FFD700"
   },
   {
    "kind": "box",
@@ -144,7 +144,7 @@
     9,
     1.2
    ],
-   "color": "#ffd23f"
+   "color": "#FFD700"
   },
   {
    "kind": "box",
@@ -158,7 +158,7 @@
     0.8,
     1.2
    ],
-   "color": "#ffd23f"
+   "color": "#FFD700"
   }
  ],
  "safeZone": {

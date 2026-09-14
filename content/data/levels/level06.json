@@ -52,7 +52,7 @@
     1,
     10
    ],
-   "color": "#2ee6a8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -66,7 +66,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -80,7 +80,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -94,7 +94,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -108,7 +108,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -122,7 +122,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -136,7 +136,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -150,7 +150,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -164,7 +164,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -178,7 +178,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -192,7 +192,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -206,7 +206,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -220,7 +220,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -234,7 +234,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -248,7 +248,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -262,7 +262,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -276,7 +276,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -290,7 +290,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -304,7 +304,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -318,7 +318,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -332,7 +332,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -346,7 +346,7 @@
     0.6,
     3.6
    ],
-   "color": "#7fd4ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -360,7 +360,7 @@
     0.6,
     3.6
    ],
-   "color": "#dff3ff"
+   "color": "#00BFA5"
   },
   {
    "kind": "box",
@@ -374,7 +374,7 @@
     1,
     12
    ],
-   "color": "#2ee6a8"
+   "color": "#1E1E24"
   },
   {
    "kind": "box",
@@ -403,7 +403,7 @@
     2.6,
     130
    ],
-   "color": "#1c2030",
+   "color": "#2E2E3E",
    "collide": false
   },
   {
@@ -418,7 +418,7 @@
     2.6,
     130
    ],
-   "color": "#1c2030",
+   "color": "#2E2E3E",
    "collide": false
   }
  ],
