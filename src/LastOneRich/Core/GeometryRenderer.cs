@@ -25,12 +25,21 @@ public struct VertexPositionNormalColor : IVertexType
     }
 }
 
+/// <summary>A static, load-time baked vertex mesh (level geometry, crowd, grid, decals).</summary>
+public sealed class BakedMesh
+{
+    public VertexBuffer Buffer;
+    public int Triangles;
+}
+
 /// <summary>
-/// Immediate-style 3D batcher for the MVP "primitives only" art style (GDD 13.2/16).
-/// Rendering baseline: per-face normals + BasicEffect directional lighting + fog,
-/// explicit render states per pass (Opaque/AlphaBlend, depth tested), MSAA from the
-/// GraphicsDeviceManager. Culling stays OFF on purpose: faces are hand-wound for the
-/// toy look and this is not a perf bottleneck at slice scale.
+/// Batched 3D renderer for the "primitives only" art style (GDD 13.2/16).
+/// Lighting rig: 3 directional lights (warm key + cool fill + rim) on BasicEffect,
+/// per-face normals, depth fog matched to the sky clear color. Emissive/hazard
+/// shapes are batched into a separate unlit "glow" pass so they pop even in shadow.
+/// Static level geometry is baked once at load into a VertexBuffer (no per-frame
+/// mesh rebuilds); dynamic shapes batch through grow-only vertex buffers.
+/// All render states are set explicitly per pass — nothing leaks between 3D and UI.
 /// </summary>
 public sealed class GeometryRenderer
 {
@@ -38,8 +47,9 @@ public sealed class GeometryRenderer
 
     readonly GraphicsDevice _gd;
     readonly BasicEffect _fx;
-    readonly RasterizerState _raster = new() { CullMode = CullMode.None }; // documented: hand-wound faces
+    readonly RasterizerState _raster = new() { CullMode = CullMode.None }; // hand-wound faces
     readonly List<VertexPositionNormalColor> _opaque = new(InitialVerts);
+    readonly List<VertexPositionNormalColor> _glow = new(2048);
     readonly List<VertexPositionNormalColor> _alpha = new(4096);
     VertexBuffer _vb;
     int _vbCap;
@@ -53,29 +63,40 @@ public sealed class GeometryRenderer
             VertexColorEnabled = true,
             TextureEnabled = false,
             FogEnabled = true,
-            FogColor = new Vector3(0.075f, 0.08f, 0.16f),
-            FogStart = 150f,
-            FogEnd = 460f,
+            FogColor = new Vector3(0.06f, 0.06f, 0.10f),
+            // Course arenas run 150-300 units long; fog must not swallow the set.
+            // (Prompt's 60/150 assumed a small arena — tuned to keep the far course visible.)
+            FogStart = 90f,
+            FogEnd = 240f,
         };
-        // Real lighting (replaces the heavy baked face shading — only mild tint variety remains).
+        // Three-light rig: soft warm ambient, warm key, cool fill, back rim.
         _fx.LightingEnabled = true;
-        _fx.AmbientLightColor = new Vector3(0.46f, 0.47f, 0.52f);
+        _fx.AmbientLightColor = new Vector3(0.28f, 0.26f, 0.30f);
         _fx.DirectionalLight0.Enabled = true;
-        _fx.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.45f, -1f, -0.35f));
-        _fx.DirectionalLight0.DiffuseColor = new Vector3(0.78f, 0.76f, 0.72f);
-        _fx.DirectionalLight0.SpecularColor = Vector3.Zero;
+        _fx.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.55f, -1f, -0.35f));
+        _fx.DirectionalLight0.DiffuseColor = new Vector3(1.0f, 0.95f, 0.85f);
+        _fx.DirectionalLight0.SpecularColor = new Vector3(0.3f, 0.3f, 0.3f);
+        _fx.DirectionalLight1.Enabled = true;
+        _fx.DirectionalLight1.Direction = Vector3.Normalize(new Vector3(0.5f, -0.4f, 0.6f));
+        _fx.DirectionalLight1.DiffuseColor = new Vector3(0.25f, 0.30f, 0.40f);
+        _fx.DirectionalLight1.SpecularColor = Vector3.Zero;
+        _fx.DirectionalLight2.Enabled = true;
+        _fx.DirectionalLight2.Direction = Vector3.Normalize(new Vector3(0.1f, 0.5f, 0.8f));
+        _fx.DirectionalLight2.DiffuseColor = new Vector3(0.15f, 0.15f, 0.20f);
+        _fx.DirectionalLight2.SpecularColor = Vector3.Zero;
     }
 
     public void BeginFrame(Camera3D cam, float aspect, Color sky)
     {
         _opaque.Clear();
+        _glow.Clear();
         _alpha.Clear();
         _fx.View = cam.View;
         _fx.Projection = cam.Projection(aspect);
         _fx.FogColor = sky.ToVector3();
     }
 
-    // ---------- emit helpers ----------
+    // ---------- emit helpers (shared by dynamic batching and load-time baking) ----------
 
     static void Face(List<VertexPositionNormalColor> list, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
     {
@@ -90,17 +111,17 @@ public sealed class GeometryRenderer
         list.Add(v0); list.Add(v2); list.Add(v3);
     }
 
-    /// <summary>Axis-aligned box. Mild per-side tint for readability; real shading comes from lighting.</summary>
-    public void Box(Vector3 center, Vector3 size, Color c)
+    /// <summary>Emit an axis-aligned box into an arbitrary list (used for baking).</summary>
+    public static void EmitBox(List<VertexPositionNormalColor> list, Vector3 center, Vector3 size, Color c)
     {
         var h = size * 0.5f;
-        var l = new Vector3(center.X - h.X, center.Y - h.Y, center.Z - h.Z);
-        var u = new Vector3(center.X + h.X, center.Y + h.Y, center.Z + h.Z);
-        EmitCuboid(_opaque, l, u, c);
+        EmitCuboid(list,
+            new Vector3(center.X - h.X, center.Y - h.Y, center.Z - h.Z),
+            new Vector3(center.X + h.X, center.Y + h.Y, center.Z + h.Z), c);
     }
 
-    /// <summary>Box rotated around Y (used by hammer arms/heads).</summary>
-    public void BoxRotY(Vector3 center, Vector3 size, float rotRad, Color c)
+    /// <summary>Emit a Y-rotated box into an arbitrary list (used for baking decals).</summary>
+    public static void EmitBoxRotY(List<VertexPositionNormalColor> list, Vector3 center, Vector3 size, float rotRad, Color c)
     {
         var h = size * 0.5f;
         float cs = MathF.Cos(rotRad), sn = MathF.Sin(rotRad);
@@ -118,14 +139,61 @@ public sealed class GeometryRenderer
 
         var fT = ColorUtil.Shade(c, 1.0f); var fB = ColorUtil.Shade(c, 0.62f);
         var fX = ColorUtil.Shade(c, 0.92f); var fZ = ColorUtil.Shade(c, 0.84f);
-        var L = _opaque;
         // corners: 0:(-x,-y,-z) 1:(x,-y,-z) 2:(-x,y,-z) 3:(x,y,-z) 4:(-x,-y,z) 5:(x,-y,z) 6:(-x,y,z) 7:(x,y,z)
-        Face(L, p[4], p[5], p[7], p[6], fZ);       // +z
-        Face(L, p[1], p[0], p[2], p[3], fZ);       // -z
-        Face(L, p[5], p[1], p[3], p[7], fX);       // +x
-        Face(L, p[0], p[4], p[6], p[2], fX);       // -x
-        Face(L, p[6], p[7], p[3], p[2], fT);       // +y
-        Face(L, p[0], p[1], p[5], p[4], fB);       // -y
+        Face(list, p[4], p[5], p[7], p[6], fZ);       // +z
+        Face(list, p[1], p[0], p[2], p[3], fZ);       // -z
+        Face(list, p[5], p[1], p[3], p[7], fX);       // +x
+        Face(list, p[0], p[4], p[6], p[2], fX);       // -x
+        Face(list, p[6], p[7], p[3], p[2], fT);       // +y
+        Face(list, p[0], p[1], p[5], p[4], fB);       // -y
+    }
+
+    /// <summary>Emit a wedge ramp (rising toward dirX/dirZ) into an arbitrary list.</summary>
+    public static void EmitRamp(List<VertexPositionNormalColor> list, Vector3 center, Vector3 size, int dirX, int dirZ, Color c)
+    {
+        var h = size * 0.5f;
+        float x0 = center.X - h.X, x1 = center.X + h.X;
+        float z0 = center.Z - h.Z, z1 = center.Z + h.Z;
+        float y0 = center.Y - h.Y, y1 = center.Y + h.Y;
+
+        if (dirZ != 0) // rise along Z
+        {
+            if (dirZ < 0) { (z0, z1) = (z1, z0); }
+            var slope = ColorUtil.Shade(c, 0.97f);
+            var side = ColorUtil.Shade(c, 0.8f);
+            var back = ColorUtil.Shade(c, 0.72f);
+            var A = new Vector3(x0, y0, z0);
+            var B = new Vector3(x1, y0, z0);
+            var C = new Vector3(x1, y1, z1);
+            var D = new Vector3(x0, y1, z1);
+            var E = new Vector3(x0, y0, z1);
+            var F = new Vector3(x1, y0, z1);
+            Face(list, A, B, C, D, slope);
+            Face(list, A, D, E, E, side); // left tri
+            list.RemoveAt(list.Count - 1);
+            Face(list, B, F, C, C, side); // right tri
+            list.RemoveAt(list.Count - 1);
+            Face(list, E, F, C, D, back);
+        }
+        else // rise along X
+        {
+            if (dirX < 0) { (x0, x1) = (x1, x0); }
+            var slope = ColorUtil.Shade(c, 0.9f);
+            var side = ColorUtil.Shade(c, 0.8f);
+            var back = ColorUtil.Shade(c, 0.72f);
+            var A = new Vector3(x0, y0, z0);
+            var B = new Vector3(x0, y0, z1);
+            var C = new Vector3(x1, y1, z1);
+            var D = new Vector3(x1, y1, z0);
+            var E = new Vector3(x1, y0, z0);
+            var F = new Vector3(x1, y0, z1);
+            Face(list, A, B, C, D, slope);
+            Face(list, A, D, E, E, side);
+            list.RemoveAt(list.Count - 1);
+            Face(list, B, F, C, C, side);
+            list.RemoveAt(list.Count - 1);
+            Face(list, E, D, C, F, back);
+        }
     }
 
     static void EmitCuboid(List<VertexPositionNormalColor> L, Vector3 l, Vector3 u, Color c)
@@ -148,55 +216,25 @@ public sealed class GeometryRenderer
         Face(L, a, b, e, d, fB);
     }
 
+    // ---------- dynamic emit (routed to buckets) ----------
+
+    /// <summary>Lit axis-aligned box with mild per-side tint; real shading comes from the light rig.</summary>
+    public void Box(Vector3 center, Vector3 size, Color c) => EmitBox(_opaque, center, size, c);
+
+    /// <summary>Unlit full-bright box — emissive look for hazards/interactives (pops in shadow).</summary>
+    public void BoxGlow(Vector3 center, Vector3 size, Color c) => EmitBox(_glow, center, size, c);
+
+    /// <summary>Unlit full-bright Y-rotated box (hammer heads, glow decals).</summary>
+    public void BoxRotYGlow(Vector3 center, Vector3 size, float rotRad, Color c) => EmitBoxRotY(_glow, center, size, rotRad, c);
+
+    /// <summary>Box rotated around Y (used by hammer arms).</summary>
+    public void BoxRotY(Vector3 center, Vector3 size, float rotRad, Color c) => EmitBoxRotY(_opaque, center, size, rotRad, c);
+
     /// <summary>Wedge ramp rising toward the given direction (collision approximates it as a height field).</summary>
     public void Ramp(Vector3 center, Vector3 size, int dirX, int dirZ, Color c)
-    {
-        var h = size * 0.5f;
-        float x0 = center.X - h.X, x1 = center.X + h.X;
-        float z0 = center.Z - h.Z, z1 = center.Z + h.Z;
-        float y0 = center.Y - h.Y, y1 = center.Y + h.Y;
+        => EmitRamp(_opaque, center, size, dirX, dirZ, c);
 
-        if (dirZ != 0) // rise along Z
-        {
-            if (dirZ < 0) { (z0, z1) = (z1, z0); }
-            var slope = ColorUtil.Shade(c, 0.97f);
-            var side = ColorUtil.Shade(c, 0.8f);
-            var back = ColorUtil.Shade(c, 0.72f);
-            var A = new Vector3(x0, y0, z0);
-            var B = new Vector3(x1, y0, z0);
-            var C = new Vector3(x1, y1, z1);
-            var D = new Vector3(x0, y1, z1);
-            var E = new Vector3(x0, y0, z1);
-            var F = new Vector3(x1, y0, z1);
-            Face(_opaque, A, B, C, D, slope);
-            Face(_opaque, A, D, E, E, side); // left tri
-            _opaque.RemoveAt(_opaque.Count - 1);
-            Face(_opaque, B, F, C, C, side); // right tri
-            _opaque.RemoveAt(_opaque.Count - 1);
-            Face(_opaque, E, F, C, D, back);
-        }
-        else // rise along X
-        {
-            if (dirX < 0) { (x0, x1) = (x1, x0); }
-            var slope = ColorUtil.Shade(c, 0.9f);
-            var side = ColorUtil.Shade(c, 0.8f);
-            var back = ColorUtil.Shade(c, 0.72f);
-            var A = new Vector3(x0, y0, z0);
-            var B = new Vector3(x0, y0, z1);
-            var C = new Vector3(x1, y1, z1);
-            var D = new Vector3(x1, y1, z0);
-            var E = new Vector3(x1, y0, z0);
-            var F = new Vector3(x1, y0, z1);
-            Face(_opaque, A, B, C, D, slope);
-            Face(_opaque, A, D, E, E, side);
-            _opaque.RemoveAt(_opaque.Count - 1);
-            Face(_opaque, B, F, C, C, side);
-            _opaque.RemoveAt(_opaque.Count - 1);
-            Face(_opaque, E, D, C, F, back);
-        }
-    }
-
-    /// <summary>Translucent trigger/hazard zone volume (drawn premultiplied, no depth write).</summary>
+    /// <summary>Translucent trigger/hazard zone volume (drawn premultiplied, depth-read, no depth write).</summary>
     public void Zone(Vector3 center, Vector3 size, Color c, float alpha)
     {
         var prem = ColorUtil.Premult(c, alpha);
@@ -219,15 +257,57 @@ public sealed class GeometryRenderer
         Face(_alpha, a, b, e, d, prem);
     }
 
+    /// <summary>Fake soft drop shadow: flat dark quad on the ground (readability cue, no real shadows).</summary>
+    public void Shadow(Vector3 center, float half, float alpha)
+    {
+        var prem = ColorUtil.Premult(new Color(0, 0, 0), alpha);
+        float y = center.Y;
+        var a = new Vector3(center.X - half, y, center.Z - half);
+        var b = new Vector3(center.X + half, y, center.Z - half);
+        var c = new Vector3(center.X + half, y, center.Z + half);
+        var d = new Vector3(center.X - half, y, center.Z + half);
+        Face(_alpha, a, b, c, d, prem);
+    }
+
+    // ---------- static baking ----------
+
+    /// <summary>Bake an emitted vertex list into a GPU buffer once (load-time; never rebuilt per frame).</summary>
+    public BakedMesh Bake(List<VertexPositionNormalColor> verts)
+    {
+        if (verts.Count == 0) return null;
+        var mesh = new BakedMesh { Triangles = verts.Count / 3 };
+        mesh.Buffer = new VertexBuffer(_gd, VertexPositionNormalColor.VertexDeclaration, verts.Count, BufferUsage.WriteOnly);
+        mesh.Buffer.SetData(verts.ToArray());
+        return mesh;
+    }
+
+    public void DrawBaked(BakedMesh mesh)
+    {
+        if (mesh?.Buffer == null) return;
+        _gd.BlendState = BlendState.Opaque;
+        _gd.DepthStencilState = DepthStencilState.Default;
+        _gd.RasterizerState = _raster;
+        _gd.SamplerStates[0] = SamplerState.LinearClamp;
+        _fx.LightingEnabled = true;
+        _gd.SetVertexBuffer(mesh.Buffer);
+        foreach (var pass in _fx.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            _gd.DrawPrimitives(PrimitiveType.TriangleList, 0, mesh.Triangles);
+        }
+        _gd.SetVertexBuffer(null);
+    }
+
     // ---------- flush ----------
 
     public void EndFrame()
     {
-        if (_opaque.Count > 0) Flush(_opaque, BlendState.Opaque, DepthStencilState.Default);
-        if (_alpha.Count > 0) Flush(_alpha, BlendState.AlphaBlend, DepthStencilState.DepthRead);
+        if (_opaque.Count > 0) Flush(_opaque, BlendState.Opaque, DepthStencilState.Default, lit: true);
+        if (_glow.Count > 0) Flush(_glow, BlendState.Opaque, DepthStencilState.Default, lit: false);
+        if (_alpha.Count > 0) Flush(_alpha, BlendState.AlphaBlend, DepthStencilState.DepthRead, lit: false);
     }
 
-    void Flush(List<VertexPositionNormalColor> verts, BlendState blend, DepthStencilState depth)
+    void Flush(List<VertexPositionNormalColor> verts, BlendState blend, DepthStencilState depth, bool lit)
     {
         int count = verts.Count;
         int tris = count / 3;
@@ -239,9 +319,11 @@ public sealed class GeometryRenderer
         }
         var arr = verts.ToArray();
         _vb.SetData(arr, 0, count);
+        // Render state isolation: every pass sets ALL states explicitly, then restores.
         var oldBlend = _gd.BlendState; var oldDepth = _gd.DepthStencilState; var oldRaster = _gd.RasterizerState;
         _gd.BlendState = blend; _gd.DepthStencilState = depth; _gd.RasterizerState = _raster;
-        _gd.SamplerStates[0] = SamplerState.AnisotropicClamp;
+        _gd.SamplerStates[0] = SamplerState.LinearClamp;
+        _fx.LightingEnabled = lit;
         _gd.SetVertexBuffer(_vb);
         foreach (var pass in _fx.CurrentTechnique.Passes)
         {

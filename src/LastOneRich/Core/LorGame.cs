@@ -11,6 +11,11 @@ public sealed class LorGame : Game
     int _frame;
     float _fps;
     readonly LaunchArgs _launch;
+    readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    double _lastUpdate;
+
+    /// <summary>0..1 factor for rendering between the previous and current physics step.</summary>
+    public static float InterpAlpha;
 
     public LorGame(LaunchArgs launch)
     {
@@ -18,12 +23,17 @@ public sealed class LorGame : Game
         _launch = launch;
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        Window.Title = "LAST ONE RICH! — Volt Dome (vertical slice)";
+        Window.Title = "LAST ONE RICH! — Volt Dome (Season 1)";
 
         // Rendering baseline (rendering task): MSAA on. Reach profile = maximum
         // compatibility (old GPUs / software GL / VMs); slice vertex counts are tiny.
         _gfx.GraphicsProfile = GraphicsProfile.Reach;
         _gfx.PreferMultiSampling = true;
+
+        // Fixed 60 Hz simulation + vsync: physics runs at the exact rate the render
+        // loop interpolates over (jitter fix 3A/3B). dt is always 1/60 in Update.
+        IsFixedTimeStep = true;
+        TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
     }
 
     protected override void Initialize()
@@ -51,6 +61,7 @@ public sealed class LorGame : Game
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
         _states.Update(dt);
+        _lastUpdate = _clock.Elapsed.TotalSeconds;
         base.Update(gameTime);
         if (_states.IsEmpty) Exit();
     }
@@ -60,6 +71,10 @@ public sealed class LorGame : Game
         _frame++;
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         if (dt > 0.0001f) _fps = _fps <= 0 ? 1f / dt : MathHelper.Lerp(_fps, 1f / dt, 0.05f);
+
+        // Render interpolation factor: how far we are into the current fixed step.
+        double step = TargetElapsedTime.TotalSeconds;
+        InterpAlpha = (float)System.Math.Clamp((_clock.Elapsed.TotalSeconds - _lastUpdate) / step, 0.0, 1.0);
 
         _states.Draw();
         if (GameServices.DebugOverlay) DrawDebugOverlay();

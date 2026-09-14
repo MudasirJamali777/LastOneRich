@@ -17,8 +17,14 @@ public static class Ui
         return Matrix.CreateTranslation(ox, oy, 0f) * Matrix.CreateScale(s, s, 1f);
     }
 
-    public static void Begin(Viewport vp) =>
+    public static void Begin(Viewport vp)
+    {
+        // 2D pass isolation: 3D depth/blend state must never bleed into the UI.
+        GameServices.Gfx.DepthStencilState = DepthStencilState.None;
+        GameServices.Gfx.BlendState = BlendState.AlphaBlend;
+        GameServices.Gfx.SamplerStates[0] = SamplerState.LinearClamp;
         GameServices.Sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, transformMatrix: ComputeTransform(vp));
+    }
 
     public static void End() => GameServices.Sb.End();
 
