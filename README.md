@@ -3,7 +3,9 @@
 A "viral mega-challenge show" competition game (original fictional branding, MrBeast-style *energy*),
 built with **C# / .NET 8 + MonoGame DesktopGL** — Visual Studio only, code-first, data-driven.
 
-The GDD §19 vertical slice has been expanded into the **full 12-round Season 1**:
+The GDD §19 vertical slice has been expanded into the **full 12-round Season 1**, then given a
+full **graphics + polish pass** (3-light rig, baked static meshes, visual language, fixed-step
+render interpolation, drop shadows, name tags, HUD upgrade):
 
 > intro cutscene (tokenized JSON template) → 12 rounds across 6 game modes →
 > results ceremony + data-driven elimination → Bank vs Risk → cash-out offers →
@@ -57,6 +59,11 @@ every mode's scoring/elimination, and the **camera input-axis acceptance check**
 | `--goto=intro` | jump straight into the intro cutscene |
 | `--goto=game` | jump straight into Round 1 gameplay |
 | `--round=N` | with `--goto=game`: start at season round N (1–12; 10 = Auction) |
+
+The game runs a **fixed 60 Hz simulation** with **render interpolation** (actors are drawn
+lerped between the previous and current physics step — no physics/render jitter), an
+exponentially smoothed chase camera, and **explicit render-state isolation** between the
+3D passes and every SpriteBatch/UI pass.
 | `--overlay` | start with the F3 debug overlay visible |
 | `--shot=path.png --shot-frame=N` | save a screenshot at frame N, then exit |
 
@@ -119,6 +126,24 @@ five auction items (shield, sabotage, extra life, golden ticket, twist preview).
   deposit for cash; most banked wins.
 - **FinaleButton** — stand on the button to drain rivals' scores (1.5/s per presser);
   standing drains stamina (burnout → forced off 5 s); waiting off-button builds score.
+
+### Visual language (Core/ColorPalette.cs — one identity per object class)
+charcoal floors · grey barriers · **green = safe/finish** · **glowing orange = hammers** ·
+glowing blue = wind · yellow = conveyors/bricks · pale cyan = ice · teal = safe stones ·
+deep red = danger pads · white drones with **glowing red scan rotors** · bright red YOU.
+The static world (geometry, crowd, floor grid, edge-warning curbs, hazard decals) is **baked
+once at load** into a single vertex buffer; hazards/interactives batch into an **unlit glow
+pass** so they pop in shadow. Actors render with a fake height-scaled drop shadow and
+world-to-screen name tags; the player has a subtle red emissive body. Fog (90→240) matches
+the near-black-blue sky. Fixed rival palette: NOVA purple, JAX orange, MIRA teal, TANK slate,
+LUXE gold, PIXEL pink.
+
+### Finalization guarantees
+- Unknown/unimplemented round modes fall back to Race rules with a warning HUD (never crash).
+- Bot stuck-recovery fires after 1.5 s; falls respawn at the last checkpoint with synced render state.
+- Timer pulses red under 15 s; twist banner drops in at round start colored by severity.
+- Leaderboard caps at 10 rows (+N more), highlights YOU, greys out eliminated runners.
+- HeadlessSim verifies all 12 rounds deterministically — exit 0 = shippable.
 
 ### What was in the slice (still true)
 

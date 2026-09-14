@@ -131,12 +131,15 @@ public static class Modes
             }
         }
 
-        // the button drains everyone else's score
-        for (int d = 0; d < drain.Count; d++)
+        lv.ButtonDown = drain.Count > 0; // drives the button's red/green glow
+
+        // the button drains everyone else's score — flat total, so multiple
+        // pressers can never outpace the waiting accrual (finale must resolve)
+        if (drain.Count > 0)
             for (int i = 0; i < actors.Count; i++)
             {
                 var o = actors[i];
-                if (!ReferenceEquals(o, drain[d]) && !o.RoundOut)
+                if (!o.OnButton && !o.RoundOut)
                     o.Score = System.Math.Max(0, o.Score - 1.5 * dt);
             }
     }

@@ -51,11 +51,11 @@ public sealed class DroneScanner
 
     public void Draw(GeometryRenderer r, float time)
     {
-        // detection disc
-        r.Zone(new Vector3(Pos.X, Pos.Y - 1.6f, Pos.Z), new Vector3(Radius * 2f, 0.15f, Radius * 2f), Tint, 0.16f + 0.05f * MathF.Sin(time * 7f));
-        // body + rotor
-        r.Box(Pos, new Vector3(1.1f, 0.6f, 1.1f), new Color(230, 235, 245));
-        r.BoxRotY(Pos + new Vector3(0, 0.5f, 0), new Vector3(2.2f, 0.1f, 0.25f), time * 22f, Tint);
+        // detection disc = red scan cone footprint
+        r.Zone(new Vector3(Pos.X, Pos.Y - 1.6f, Pos.Z), new Vector3(Radius * 2f, 0.15f, Radius * 2f), ColorPalette.DroneScan, 0.16f + 0.05f * MathF.Sin(time * 7f));
+        // white body + glowing red rotor (visual language: white machine, red danger)
+        r.Box(Pos, new Vector3(1.1f, 0.6f, 1.1f), ColorPalette.DroneBody);
+        r.BoxRotYGlow(Pos + new Vector3(0, 0.5f, 0), new Vector3(2.2f, 0.1f, 0.25f), time * 22f, ColorPalette.DroneScan);
         r.Box(Pos + new Vector3(0, -0.5f, 0), new Vector3(0.3f, 0.4f, 0.3f), new Color(40, 44, 58));
     }
 }
@@ -65,7 +65,7 @@ public sealed class IceZone
 {
     public Vector3 Pos, Size;
     public float FrictionMult = 0.3f;
-    public Color Tint = new(190, 230, 255);
+    public Color Tint = ColorPalette.IceCyan;
 
     public IceZone(float[] dto)
     {

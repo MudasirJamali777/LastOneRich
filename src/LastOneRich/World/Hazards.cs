@@ -91,7 +91,7 @@ public sealed class RotatorHammer
         r.Box(new Vector3(Pivot.X, Pivot.Y * 0.5f, Pivot.Z), new Vector3(0.7f, Pivot.Y, 0.7f), new Color(40, 44, 58));
         var dir = new Vector3(MathF.Sin(Angle), 0, MathF.Cos(Angle));
         r.BoxRotY(Pivot + dir * (ArmLength * 0.5f), ArmSize, Angle, new Color(200, 205, 220));
-        r.BoxRotY(HeadPos, HeadSize, Angle, Tint);
+        r.BoxRotYGlow(HeadPos, HeadSize, Angle, Tint == Color.Red ? ColorPalette.DangerOrange : Tint);
     }
 }
 
@@ -99,7 +99,7 @@ public sealed class ConveyorZone
 {
     public Vector3 Pos, Size, Dir;
     public double Speed = 6;
-    public Color Tint = Color.Yellow;
+    public Color Tint = ColorPalette.ConveyorYellow;
 
     public ConveyorZone(ConveyorDTO dto)
     {
@@ -176,7 +176,7 @@ public sealed class WindZone
 {
     public Vector3 Pos, Size, Dir;
     public double Strength = 10, Period = 4, Duty = 0.5;
-    public Color Tint = Color.LightBlue;
+    public Color Tint = ColorPalette.WindBlue;
 
     public WindZone(WindDTO dto)
     {
@@ -212,7 +212,8 @@ public sealed class WindZone
             System.MathF.Abs(Dir.X) * 0.4f + System.MathF.Abs(Dir.Z) * Size.X,
             Size.Y * 0.8f,
             System.MathF.Abs(Dir.Z) * 0.4f + System.MathF.Abs(Dir.X) * Size.Z);
-        r.Box(plateCenter, plateSize, Active(time) ? Tint : ColorUtil.Shade(Tint, 0.4f));
+        if (Active(time)) r.BoxGlow(plateCenter, plateSize, Tint);
+        else r.Box(plateCenter, plateSize, ColorUtil.Shade(Tint, 0.4f));
     }
 }
 

@@ -15,7 +15,7 @@ public sealed class Level
     public Vector3[] Spawns = System.Array.Empty<Vector3>();
     public Vector3[] Checkpoints = System.Array.Empty<Vector3>();
     public Vector3 FinishCenter, FinishHalf;
-    public Color SkyColor = new(19, 20, 41);
+    public Color SkyColor = ColorPalette.Sky;
     public Action<string> Sfx;
     public Func<Actor, bool> ShieldHook; // auction upgrade: consume to ignore one strike
 
@@ -32,6 +32,14 @@ public sealed class Level
     public int VaultNode = -1, DepositNode = -1;
     public Vector3 MidPoint;
 
+    // graphics pass: load-baked static mesh + mode fallback + button occupancy (for the glow)
+    public bool FallbackMode;
+    public bool ButtonDown;
+    List<VertexPositionNormalColor> _staticVerts;
+    BakedMesh _staticMesh;
+    static readonly System.Collections.Generic.HashSet<string> KnownTypes = new()
+    { "Race", "SurvivalZone", "StrikesOut", "ScoreCollect", "FinaleButton" };
+
     public float Time;
     readonly List<Collider> _moverColliders = new();
     readonly List<(Vector3 c, Vector3 s, Color col)> _crowd = new();
@@ -44,6 +52,15 @@ public sealed class Level
     {
         Dto = dto;
         Sfx = sfx;
+
+        // Finalization guard: unimplemented/unknown modes fall back to Race rules
+        // with a warning HUD instead of misbehaving (data errors degrade, never crash).
+        if (!KnownTypes.Contains(Dto.Type))
+        {
+            System.Console.WriteLine($"[level] '{Dto.Name}': unknown mode '{Dto.Type}' — using Race rules");
+            FallbackMode = true;
+            Dto.Type = "Race";
+        }
 
         float Mult(string target, string param, float baseVal)
         {
@@ -175,6 +192,97 @@ public sealed class Level
                 }
             }
         }
+
+        BakeStaticGeometry();
+    }
+
+    // ---------- static bake (graphics pass): geometry, crowd, floor grid, edge curbs, hazard decals ----------
+    // Built once at load as pure vertex data; the renderer uploads it on first draw.
+
+    void BakeStaticGeometry()
+    {
+        _staticVerts = new List<VertexPositionNormalColor>(1 << 14);
+
+        foreach (var g in Dto.Geometry)
+        {
+            var col = ColorUtil.Parse(g.Color);
+            if (string.Equals(g.Kind, "ramp", StringComparison.OrdinalIgnoreCase))
+            {
+                int dx = 0, dz = 0;
+                switch ((g.Dir ?? "z+").ToLowerInvariant())
+                {
+                    case "x+": dx = 1; break;
+                    case "x-": dx = -1; break;
+                    case "z-": dz = -1; break;
+                    default: dz = 1; break;
+                }
+                GeometryRenderer.EmitRamp(_staticVerts, g.Pos.ToVec3(), g.Size.ToVec3(), dx, dz, col);
+            }
+            else
+            {
+                GeometryRenderer.EmitBox(_staticVerts, g.Pos.ToVec3(), g.Size.ToVec3(), col);
+            }
+        }
+
+        foreach (var c in _crowd) GeometryRenderer.EmitBox(_staticVerts, c.c, c.s, c.col);
+
+        BakeFloorGridAndCurbs();
+        BakeHazardDecals();
+    }
+
+    /// <summary>Subtle 4-unit floor grid + amber edge curbs on every big walkable slab (depth cues).</summary>
+    void BakeFloorGridAndCurbs()
+    {
+        foreach (var g in Dto.Geometry)
+        {
+            if (g.Collide == false) continue;
+            if (string.Equals(g.Kind, "ramp", StringComparison.OrdinalIgnoreCase)) continue;
+            var s = g.Size.ToVec3(); var c = g.Pos.ToVec3();
+            if (s.X < 8 || s.Z < 8) continue;                    // only real floor slabs
+            float top = c.Y + s.Y * 0.5f;
+            if (top > 2.5f || top < -5f) continue;               // walkable height band only
+
+            // grid lines (both axes), just above the surface
+            var grid = ColorPalette.GridLine;
+            for (float x = c.X - s.X * 0.5f + 4f; x < c.X + s.X * 0.5f - 0.2f; x += 4f)
+                GeometryRenderer.EmitBox(_staticVerts, new Vector3(x, top + 0.012f, c.Z), new Vector3(0.07f, 0.02f, s.Z - 0.2f), grid);
+            for (float z = c.Z - s.Z * 0.5f + 4f; z < c.Z + s.Z * 0.5f - 0.2f; z += 4f)
+                GeometryRenderer.EmitBox(_staticVerts, new Vector3(c.X, top + 0.012f, z), new Vector3(s.X - 0.2f, 0.02f, 0.07f), grid);
+
+            // edge-warning curbs on the slab perimeter
+            var curb = ColorPalette.EdgeWarn;
+            float cw = 0.34f, ch = 0.05f;
+            GeometryRenderer.EmitBox(_staticVerts, new Vector3(c.X, top + ch * 0.5f, c.Z - s.Z * 0.5f + cw * 0.5f), new Vector3(s.X, ch, cw), curb);
+            GeometryRenderer.EmitBox(_staticVerts, new Vector3(c.X, top + ch * 0.5f, c.Z + s.Z * 0.5f - cw * 0.5f), new Vector3(s.X, ch, cw), curb);
+            GeometryRenderer.EmitBox(_staticVerts, new Vector3(c.X - s.X * 0.5f + cw * 0.5f, top + ch * 0.5f, c.Z), new Vector3(cw, ch, s.Z - cw * 2f), curb);
+            GeometryRenderer.EmitBox(_staticVerts, new Vector3(c.X + s.X * 0.5f - cw * 0.5f, top + ch * 0.5f, c.Z), new Vector3(cw, ch, s.Z - cw * 2f), curb);
+        }
+    }
+
+    /// <summary>Static hazard decals: red warning pads under hammers, blue flow arrows in wind corridors.</summary>
+    void BakeHazardDecals()
+    {
+        foreach (var h in Hammers)
+        {
+            float reach = h.ArmLength + 1.2f;
+            GeometryRenderer.EmitBox(_staticVerts, new Vector3(h.Pivot.X, 0.03f, h.Pivot.Z),
+                new Vector3(reach * 2f, 0.05f, reach * 2f), new Color(96, 18, 18));
+        }
+        foreach (var w in Winds)
+        {
+            var d = w.Dir; d.Y = 0;
+            if (d.LengthSquared() < 0.001f) continue;
+            d.Normalize();
+            float yaw = MathF.Atan2(d.X, d.Z);                  // heading of the flow
+            for (int k = -1; k <= 1; k++)
+            {
+                var baseP = new Vector3(w.Pos.X, 0.045f, w.Pos.Z) + d * (k * 5f);
+                GeometryRenderer.EmitBoxRotY(_staticVerts, baseP + new Vector3(d.Z, 0, -d.X) * 0.45f + d * 0.35f,
+                    new Vector3(0.34f, 0.02f, 1.5f), yaw + 2.55f, ColorPalette.WindBlue);
+                GeometryRenderer.EmitBoxRotY(_staticVerts, baseP - new Vector3(d.Z, 0, -d.X) * 0.45f + d * 0.35f,
+                    new Vector3(0.34f, 0.02f, 1.5f), yaw - 2.55f, ColorPalette.WindBlue);
+            }
+        }
     }
 
     public bool DroneNear(Vector3 p, float margin = 1f)
@@ -273,6 +381,8 @@ public sealed class Level
         RespawnHook?.Invoke(a, a.Pos);
         var cp = Checkpoints.Length > 0 ? Checkpoints[System.Math.Min(a.CheckpointIdx, Checkpoints.Length - 1)] : Spawns[0];
         a.Pos = cp + new Vector3(0, Actor.HalfY + 0.08f, 0);
+        a.PrevPos = a.Pos; // teleport: keep render interpolation seamless
+        a.LastGroundY = cp.Y;
         a.Vel = Vector3.Zero;
         a.InSlime = false;
         a.Stagger = 0.25f;
@@ -284,34 +394,19 @@ public sealed class Level
 
     public void Draw(GeometryRenderer r)
     {
-        foreach (var g in Dto.Geometry)
+        // static world: one baked vertex buffer (geometry + crowd + grid + curbs + decals)
+        if (_staticMesh == null && _staticVerts != null)
         {
-            var col = ColorUtil.Parse(g.Color);
-            if (string.Equals(g.Kind, "ramp", StringComparison.OrdinalIgnoreCase))
-            {
-                int dx = 0, dz = 0;
-                switch ((g.Dir ?? "z+").ToLowerInvariant())
-                {
-                    case "x+": dx = 1; break;
-                    case "x-": dx = -1; break;
-                    case "z-": dz = -1; break;
-                    default: dz = 1; break;
-                }
-                r.Ramp(g.Pos.ToVec3(), g.Size.ToVec3(), dx, dz, col);
-            }
-            else
-            {
-                r.Box(g.Pos.ToVec3(), g.Size.ToVec3(), col);
-            }
+            _staticMesh = r.Bake(_staticVerts);
+            _staticVerts = null; // CPU copy no longer needed
         }
-
-        foreach (var c in _crowd) r.Box(c.c, c.s, c.col);
+        r.DrawBaked(_staticMesh);
 
         foreach (var cp in Checkpoints)
             r.Zone(cp + new Vector3(0, 0.05f, 0), new Vector3(2.8f, 0.12f, 2.8f), new Color(63, 210, 255), 0.35f);
 
         float pulse = 0.22f + 0.10f * MathF.Sin(Time * 5f);
-        r.Zone(FinishCenter, FinishHalf * 2f, new Color(255, 210, 63), pulse);
+        r.Zone(FinishCenter, FinishHalf * 2f, ColorPalette.Safe, pulse); // finish = green = safe
 
         foreach (var s in Slimes) s.Draw(r, Time);
         foreach (var w in Winds) w.Draw(r, Time);
@@ -325,18 +420,18 @@ public sealed class Level
         if (Dto.SafeZone != null)
         {
             float zonePulse = 0.18f + 0.07f * MathF.Sin(Time * 3f);
-            r.Zone(SafeZoneCenter, SafeZoneHalf * 2f, new Color(255, 210, 63), zonePulse);
-            r.Box(SafeZoneCenter + new Vector3(0, -SafeZoneHalf.Y + 0.1f, 0), new Vector3(SafeZoneHalf.X * 2, 0.15f, SafeZoneHalf.Z * 2), new Color(255, 210, 63));
+            r.Zone(SafeZoneCenter, SafeZoneHalf * 2f, ColorPalette.Safe, zonePulse);
+            r.Box(SafeZoneCenter + new Vector3(0, -SafeZoneHalf.Y + 0.1f, 0), new Vector3(SafeZoneHalf.X * 2, 0.15f, SafeZoneHalf.Z * 2), ColorPalette.Safe);
         }
         if (Dto.Vault != null)
         {
             r.Zone(VaultPos, VaultHalf * 2f, new Color(255, 157, 46), 0.16f);
-            r.Box(VaultPos + new Vector3(0, VaultHalf.Y + 0.3f, 0), new Vector3(1.2f, 0.6f, 1.2f), new Color(255, 210, 63));
+            r.BoxGlow(VaultPos + new Vector3(0, VaultHalf.Y + 0.3f, 0), new Vector3(1.2f, 0.6f, 1.2f), ColorPalette.CashGold);
         }
         if (Dto.Deposit != null)
         {
-            r.Zone(DepositPos, DepositHalf * 2f, new Color(141, 255, 63), 0.16f + 0.05f * MathF.Sin(Time * 4f));
-            r.Box(DepositPos + new Vector3(0, DepositHalf.Y + 0.3f, 0), new Vector3(1.2f, 0.6f, 1.2f), new Color(141, 255, 63));
+            r.Zone(DepositPos, DepositHalf * 2f, ColorPalette.Safe, 0.16f + 0.05f * MathF.Sin(Time * 4f));
+            r.BoxGlow(DepositPos + new Vector3(0, DepositHalf.Y + 0.3f, 0), new Vector3(1.2f, 0.6f, 1.2f), ColorPalette.Safe);
         }
         if (Dto.Button != null)
         {
@@ -344,7 +439,8 @@ public sealed class Level
             var bp = b.Pos.ToVec3();
             r.Zone(new Vector3(bp.X, bp.Y + 0.05f, bp.Z), new Vector3((float)b.Radius * 2f, 0.2f, (float)b.Radius * 2f), new Color(255, 70, 70), 0.14f + 0.05f * MathF.Sin(Time * 5f));
             r.Box(bp + new Vector3(0, 0.6f, 0), new Vector3(2.4f, 1.2f, 2.4f), new Color(60, 64, 84));
-            r.Box(bp + new Vector3(0, 1.35f, 0), new Vector3(1.6f, 0.3f, 1.6f), new Color(255, 70, 70));
+            // bright green when free, hot red while pressed — readable state at a glance
+            r.BoxGlow(bp + new Vector3(0, 1.35f, 0), new Vector3(1.6f, 0.3f, 1.6f), ButtonDown ? new Color(255, 60, 60) : new Color(0, 255, 68));
         }
     }
 }

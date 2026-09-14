@@ -288,7 +288,7 @@ public sealed class BotController
             if (!_stuckInit) { _stuckInit = true; _lastZ = a.Pos.Z; _stuckT = 0; }
             if (a.Pos.Z - _lastZ > 0.4f) { _lastZ = a.Pos.Z; _stuckT = 0; }
             else _stuckT += dt;
-            if (_stuckT > 4.5f)
+            if (_stuckT > 1.5f)
             {
                 _node = _graph.Nearest(a.Pos);
                 a.Pos = _graph.Nodes[_node] + new Vector3(0, Actor.HalfY + 0.1f, 0);

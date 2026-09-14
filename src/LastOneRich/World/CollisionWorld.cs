@@ -68,6 +68,7 @@ public sealed class CollisionWorld
 
     public void Integrate(Actor a, float dt, Vector3 carry)
     {
+        a.PrevPos = a.Pos; // render interpolation anchor (graphics pass)
         a.Pos += carry;
 
         a.Pos.X += a.Vel.X * dt;
@@ -119,6 +120,7 @@ public sealed class CollisionWorld
             a.Pos.Y = floor.Value + Actor.HalfY;
             a.Vel.Y = 0f;
             grounded = true;
+            a.LastGroundY = floor.Value; // drop-shadow anchor (graphics pass)
         }
 
         a.OnGround = grounded;

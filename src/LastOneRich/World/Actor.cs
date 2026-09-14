@@ -13,6 +13,8 @@ public sealed class Actor
     public Microsoft.Xna.Framework.Color Color = Microsoft.Xna.Framework.Color.White;
 
     public Vector3 Pos;
+    public Vector3 PrevPos;      // position before the last physics step (render interpolation)
+    public float LastGroundY;    // top of the last surface stood on (drop-shadow anchor)
     public Vector3 Vel;
     public bool OnGround;
     public int GroundMover = -1;
