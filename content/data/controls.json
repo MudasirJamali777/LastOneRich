@@ -7,5 +7,10 @@
   "dive": ["LeftShift", "RightShift"],
   "confirm": ["Enter", "Space", "E"],
   "pause": ["Escape"],
-  "debugOverlay": ["F3"]
+  "debugOverlay": ["F3"],
+
+  "mouseSensitivity": 0.003,
+  "invertY": false,
+  "cameraDistance": 8.0,
+  "cameraHeight": 2.5
 }

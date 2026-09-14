@@ -13,16 +13,8 @@ public sealed class SaveData
 
 public static class SaveSystem
 {
-    static string Dir()
-    {
-        try
-        {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            if (!string.IsNullOrEmpty(appData)) return Path.Combine(appData, "LastOneRich");
-        }
-        catch { }
-        return AppContext.BaseDirectory;
-    }
+    /// <summary>saves/ next to the executable — keeps the Steam build self-contained and portable.</summary>
+    static string Dir() => Path.Combine(AppContext.BaseDirectory, "saves");
 
     static string PathFor() => Path.Combine(Dir(), "save.json");
 

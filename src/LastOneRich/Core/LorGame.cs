@@ -47,6 +47,7 @@ public sealed class LorGame : Game
     protected override void LoadContent()
     {
         var sb = new SpriteBatch(GraphicsDevice);
+        Input.AttachHost(this); // enables mouse capture for gameplay mouse-look
         GameServices.Init(GraphicsDevice, sb, _launch);
         if (_launch?.Overlay == true) GameServices.DebugOverlay = true;
         _states = new StateMachine();
