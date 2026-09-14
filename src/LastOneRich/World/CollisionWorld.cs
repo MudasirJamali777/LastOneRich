@@ -66,6 +66,50 @@ public sealed class CollisionWorld
         System.MathF.Abs(p.Y - center.Y) <= half.Y &&
         System.MathF.Abs(p.Z - center.Z) <= half.Z;
 
+    /// <summary>
+    /// Camera collision helper: march a small sphere of <paramref name="radius"/> from
+    /// <paramref name="origin"/> along <paramref name="dir"/> and return the distance travelled
+    /// before it first overlaps level geometry, capped at <paramref name="maxDist"/>.
+    /// Returns maxDist when the path is clear. Read-only — safe to call from render/camera code.
+    /// </summary>
+    public float RaySweep(Vector3 origin, Vector3 dir, float maxDist, float radius = 0.35f)
+    {
+        if (maxDist <= 0f) return 0f;
+        if (dir.LengthSquared() < 0.0001f) return maxDist;
+        dir.Normalize();
+
+        // Fixed-step march: cheap, allocation-free, and plenty accurate for a chase boom.
+        const float Step = 0.25f;
+        int steps = (int)MathF.Ceiling(maxDist / Step);
+        if (steps > 256) steps = 256;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            float d = MathF.Min(i * Step, maxDist);
+            var p = origin + dir * d;
+
+            foreach (var c in Colliders)
+            {
+                if (MathF.Abs(p.X - c.Center.X) > c.Half.X + radius) continue;
+                if (MathF.Abs(p.Y - c.Center.Y) > c.Half.Y + radius) continue;
+                if (MathF.Abs(p.Z - c.Center.Z) > c.Half.Z + radius) continue;
+                return MathF.Max(0f, d - Step);   // back off to the last clear sample
+            }
+
+            foreach (var r in Ramps)
+            {
+                if (p.X < r.Min.X - radius || p.X > r.Max.X + radius) continue;
+                if (p.Z < r.Min.Z - radius || p.Z > r.Max.Z + radius) continue;
+                float h = r.HeightAt(MathHelper.Clamp(p.X, r.Min.X, r.Max.X),
+                                     MathHelper.Clamp(p.Z, r.Min.Z, r.Max.Z));
+                if (p.Y <= h + radius && p.Y >= r.BaseY - radius)
+                    return MathF.Max(0f, d - Step);
+            }
+        }
+
+        return maxDist;
+    }
+
     public void Integrate(Actor a, float dt, Vector3 carry)
     {
         a.PrevPos = a.Pos; // render interpolation anchor (graphics pass)

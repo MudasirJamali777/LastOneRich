@@ -38,6 +38,10 @@ public sealed class GameplayState : IGameState
     int _pauseSel;
     static readonly string[] PauseItems = { "RESUME", "RESTART ROUND", "QUIT TO MENU" };
 
+    // Mouse-look: the boom is driven by Camera3D.Yaw/Pitch; the player body turns to match.
+    float _bodyYaw;
+    bool _bodyYawInit;
+
     int _roundNo, _roundTotal;
     float _twistBannerT = 99f;
     Color _twistSev = new(255, 210, 63);
@@ -48,19 +52,66 @@ public sealed class GameplayState : IGameState
 
     public GameplayState(StateMachine sm, SeasonRun season) { _sm = sm; _season = season; }
 
+    /// <summary>
+    /// Mouse-look movement basis: W drives straight down the camera's yaw-forward axis,
+    /// A/D strafe along yaw-right. Pitch deliberately does not tilt the move plane.
+    /// </summary>
     Vector2 ResolveMove(Vector2 raw)
     {
         if (raw.LengthSquared() < 0.001f) return Vector2.Zero;
-        var right = _cam.RightDir; right.Y = 0f;
-        if (right.LengthSquared() < 0.0001f) right = new Vector3(1f, 0f, 0f);
-        right.Normalize();
-        var fwd = _cam.ForwardDir; fwd.Y = 0f;
-        if (fwd.LengthSquared() < 0.0001f) fwd = new Vector3(0f, 0f, 1f);
-        fwd.Normalize();
-        var w = right * raw.X + fwd * raw.Y;
+        var w = _cam.YawRight * raw.X + _cam.YawForward * raw.Y;
         if (w.LengthSquared() < 0.0001f) return Vector2.Zero;
         w.Normalize();
         return new Vector2(w.X, w.Z);
+    }
+
+    /// <summary>Feed mouse (+ right stick) into the camera angles. Never runs while paused.</summary>
+    void UpdateLook(float dt)
+    {
+        float sens = Keybinds.MouseSensitivity;
+        var md = Input.MouseDelta;
+
+        // Mouse right (+X) must swing the view right, which means Yaw DECREASES
+        // under XNA's right-handed look-at basis (verified against CreateLookAt).
+        float yaw = -md.X * sens;
+        float pitch = md.Y * sens;
+
+        // Pad look: scaled to a comfortable rad/sec rate rather than pixels.
+        var stick = Input.LookStick;
+        yaw -= stick.X * 2.6f * dt;
+        pitch -= stick.Y * 2.0f * dt;
+
+        if (Keybinds.InvertY) pitch = -pitch;
+
+        // Pitch is "camera raised, looking down at the player", so pushing the mouse
+        // forward (md.Y negative = look up) must lower it. Straight sign, no negation.
+        _cam.ApplyLook(yaw, pitch);
+    }
+
+    /// <summary>Turn the body toward the camera yaw while movement is held; otherwise hold the last facing.</summary>
+    void UpdateBodyFacing(Actor p, Vector2 rawMove, float dt)
+    {
+        if (!_bodyYawInit)
+        {
+            _bodyYaw = MathF.Atan2(p.FaceDir.X, p.FaceDir.Z);
+            _bodyYawInit = true;
+        }
+
+        if (rawMove.LengthSquared() > 0.001f)
+        {
+            float diff = MathHelper.WrapAngle(_cam.Yaw - _bodyYaw);
+            float k = 1f - MathF.Exp(-12f * dt);   // smooth turn, never a snap
+            _bodyYaw = MathHelper.WrapAngle(_bodyYaw + diff * k);
+        }
+
+        p.FaceDir = new Vector3(MathF.Sin(_bodyYaw), 0f, MathF.Cos(_bodyYaw));
+    }
+
+    /// <summary>Capture the cursor only while the round is actually being played.</summary>
+    void SyncMouseCapture()
+    {
+        bool want = !_pause && _phase != Phase.Ended && !_actors[0].Finished;
+        Input.SetMouseCapture(want);
     }
 
     public void Enter()
@@ -118,35 +169,54 @@ public sealed class GameplayState : IGameState
         }
 
         var p = _actors[0];
-        _cam.Position = p.Pos + new Vector3(0, 5f, -10f);
-        _cam.LookAt = p.Pos;
+
+        // Start the boom behind the spawn facing, then let the orbit take over.
+        var face0 = p.FaceDir; face0.Y = 0f;
+        if (face0.LengthSquared() < 0.001f) face0 = new Vector3(0f, 0f, 1f);
+        face0.Normalize();
+        _cam.Yaw = MathF.Atan2(face0.X, face0.Z);
+        _cam.Pitch = MathHelper.ToRadians(14f);
+        _bodyYaw = _cam.Yaw;
+        _bodyYawInit = true;
+        _cam.UpdateOrbit(p.Pos, Keybinds.CameraDistance, Keybinds.CameraHeight, 1f, CamSweep);
+
+        Input.SetMouseCapture(true);
 
         GameServices.Audio.PlayMusic();
         _screen.FadeAlpha = 1f;
         _screen.FadeTo(0f, 2.5f);
     }
 
-    public void Exit() { }
+    public void Exit() => Input.SetMouseCapture(false);
 
     public void Update(float dt)
     {
-        _screen.Update(dt);
-        _fx.Update(dt);
-        _phaseT += dt;
-
+        // Pause freezes ALL game time — screen fx, particles and the phase clock included.
+        // Only the pause menu itself ticks (bug fix 3).
         if (_pause) { UpdatePause(dt); return; }
 
-        if (Input.PausePressed && _phase == Phase.Racing)
+        // Auction redirect pending (round 10 has no level JSON) — never tick a level-less round.
+        if (_lv == null || _actors.Count == 0) return;
+
+        // Pausing is allowed in every phase, not just Racing (bug fix 4).
+        if (Input.PausePressed)
         {
             _pause = true;
             _pauseSel = 0;
+            Input.SetMouseCapture(false);
             GameServices.Audio.Event("blip");
             return;
         }
 
+        _screen.Update(dt);
+        _fx.Update(dt);
+        _phaseT += dt;
+
+        SyncMouseCapture();
+        if (!_actors[0].Finished && _phase != Phase.Ended) UpdateLook(dt);
+
         if (_phase == Phase.Countdown)
         {
-            if (_lv == null) return; // auction redirect pending — never tick a level-less round
             _lv.Update(dt, _actors); // scenery keeps moving during the countdown
             int n = (int)MathF.Ceiling(CountTime - _phaseT - 0.6f);
             if (n != _lastCount && n >= 1 && n <= 3) { _lastCount = n; GameServices.Audio.Event("blip"); }
@@ -170,9 +240,8 @@ public sealed class GameplayState : IGameState
             var p = _actors[0];
             if (!p.Finished)
             {
-                // Camera-relative movement: raw keys/stick are screen-space intent,
-                // resolved into world XZ via the chase camera's flattened basis.
-                // This keeps A = screen-left and D = screen-right at every yaw.
+                // Mouse-look movement: W goes where the camera looks, A/D strafe,
+                // S backs away — all relative to the camera yaw.
                 var raw = Input.Move;
                 DebugMoveRaw = raw;
                 var mv = ResolveMove(raw);
@@ -184,6 +253,10 @@ public sealed class GameplayState : IGameState
                     Dive = Input.DivePressed,
                 };
                 _pc.Update(p, inp, _lv, dt);
+
+                // Body turns to the camera yaw while moving; holds its last heading when idle.
+                // Runs after the controller so it wins over the controller's intent-facing.
+                UpdateBodyFacing(p, raw, dt);
             }
             else
             {
@@ -243,9 +316,21 @@ public sealed class GameplayState : IGameState
 
     void UpdatePause(float dt)
     {
+        // Mouse stays released for the whole pause.
+        Input.SetMouseCapture(false);
+
         if (Input.UpPressed) { _pauseSel = (_pauseSel + PauseItems.Length - 1) % PauseItems.Length; GameServices.Audio.Event("blip"); }
         if (Input.DownPressed) { _pauseSel = (_pauseSel + 1) % PauseItems.Length; GameServices.Audio.Event("blip"); }
-        if (Input.PausePressed && _pauseSel == 0) { _pause = false; return; }
+
+        // ESC always resumes, whatever the cursor is sitting on (bug fix 2).
+        if (Input.PausePressed)
+        {
+            _pause = false;
+            GameServices.Audio.Event("blip");
+            SyncMouseCapture();
+            return;
+        }
+
         if (Input.ConfirmPressed)
         {
             switch (_pauseSel)
@@ -253,6 +338,7 @@ public sealed class GameplayState : IGameState
                 case 0:
                     _pause = false;
                     GameServices.Audio.Event("blip");
+                    SyncMouseCapture();
                     break;
                 case 1:
                     GameServices.Audio.Event("blip");
@@ -276,13 +362,13 @@ public sealed class GameplayState : IGameState
             _cam.SmoothTo(target, p.Pos + new Vector3(0, 1.2f, 0), 3f, dt);
             return;
         }
-        var face = p.FaceDir; face.Y = 0;
-        if (face.LengthSquared() < 0.001f) face = new Vector3(0, 0, 1);
-        face.Normalize();
-        var camPos = p.Pos - face * 7.5f + new Vector3(0, 4.6f, 0);
-        var look = p.Pos + new Vector3(0, 1.4f, 0) + face * 2.5f;
-        _cam.SmoothTo(camPos, look, 6f, dt);
+        // Mouse-look orbit: boom length/height from controls.json, pulled in on geometry hits.
+        _cam.UpdateOrbit(p.Pos, Keybinds.CameraDistance, Keybinds.CameraHeight, dt, CamSweep);
     }
+
+    /// <summary>Camera collision probe — how far the boom can extend before hitting level geometry.</summary>
+    float CamSweep(Vector3 origin, Vector3 dir, float maxDist) =>
+        _lv?.World == null ? maxDist : _lv.World.RaySweep(origin, dir, maxDist);
 
     public void Draw()
     {
@@ -458,7 +544,7 @@ public sealed class GameplayState : IGameState
         // controls hint: bright during the intro seconds, faded afterwards (always readable)
         if (!_pause)
         {
-            string hint = "WASD MOVE · SPACE JUMP · SHIFT DIVE · ESC PAUSE";
+            string hint = "MOUSE LOOK · WASD MOVE · SPACE JUMP · SHIFT DIVE · ESC PAUSE";
             var hs = f.Measure(hint, 0.42f);
             bool intro = _phase == Phase.Countdown || _tracker.Time < 5;
             f.Draw(sb, hint, new Vector2(1262, 694), intro ? new Color(160, 165, 190) : new Color(120, 126, 150, 130), 0.42f, 0f, new Vector2(hs.X, 0), true);
