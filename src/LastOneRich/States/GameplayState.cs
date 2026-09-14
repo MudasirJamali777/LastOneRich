@@ -39,6 +39,8 @@ public sealed class GameplayState : IGameState
     static readonly string[] PauseItems = { "RESUME", "RESTART ROUND", "QUIT TO MENU" };
 
     int _roundNo, _roundTotal;
+    float _twistBannerT = 99f;
+    Color _twistSev = new(255, 210, 63);
 
     // Debug overlay data (F3): raw screen intent vs resolved world XZ.
     public static Vector2 DebugMoveRaw = Vector2.Zero;
@@ -106,6 +108,15 @@ public sealed class GameplayState : IGameState
         _roundNo = _season.RoundIdx + 1;
         _roundTotal = _season.Season.Rounds.Count;
 
+        // twist severity (banner color): strongest |log mult| across effects
+        if (_season.ActiveTwist != null)
+        {
+            double sev = 0;
+            foreach (var e in _season.ActiveTwist.Effects)
+                sev = System.Math.Max(sev, System.Math.Abs(System.Math.Log((double)e.Mult)));
+            _twistSev = ColorPalette.TwistSeverity(sev);
+        }
+
         var p = _actors[0];
         _cam.Position = p.Pos + new Vector3(0, 5f, -10f);
         _cam.LookAt = p.Pos;
@@ -143,6 +154,7 @@ public sealed class GameplayState : IGameState
             {
                 _phase = Phase.Racing;
                 _phaseT = 0;
+                _twistBannerT = 0f;
                 GameServices.Audio.Event("go");
                 _fx.SparkBurst(new Vector2(640, 360), 60, new Color(255, 235, 150));
             }
@@ -208,6 +220,7 @@ public sealed class GameplayState : IGameState
         }
 
         _tracker.Update(dt);
+        _twistBannerT += dt;
 
         if (_phase == Phase.Racing && _tracker.Ended)
         {
@@ -279,14 +292,17 @@ public sealed class GameplayState : IGameState
         var r = GameServices.Renderer;
         r.BeginFrame(_cam, aspect, _lv.SkyColor);
         _lv.Draw(r);
-        foreach (var a in _actors) ActorRenderer.Draw(r, a);
+        float alpha = LorGame.InterpAlpha;
+        foreach (var a in _actors) ActorRenderer.Draw(r, a, alpha);
         r.EndFrame();
 
         var f = GameServices.Font;
         var sb = GameServices.Sb;
         Ui.Begin(vp);
 
+        DrawNameTags(f, sb, aspect);
         DrawHud(f, sb, aspect);
+        DrawTwistBanner(f, sb);
 
         if (_phase == Phase.Countdown) DrawCountdown(f, sb);
         if (!string.IsNullOrEmpty(_finishBanner) && _phase != Phase.Countdown) DrawFinishBanner(f, sb);
@@ -297,15 +313,55 @@ public sealed class GameplayState : IGameState
         _screen.Draw(sb, vp);
     }
 
+    /// <summary>World-to-screen name tags: instant who-is-who; OUT contestants are greyed.</summary>
+    void DrawNameTags(BitmapFont f, Microsoft.Xna.Framework.Graphics.SpriteBatch sb, float aspect)
+    {
+        var gd = GameServices.Gfx;
+        foreach (var a in _actors)
+        {
+            if (a.RoundOut) continue;
+            var ps = gd.Viewport.Project(a.Pos + new Vector3(0, 1.95f, 0), _cam.Projection(aspect), _cam.View, Matrix.Identity);
+            if (ps.Z is <= 0 or >= 1) continue;
+            var col = a.IsPlayer ? new Color(255, 210, 63) : ColorUtil.Shade(a.Color, 1.12f);
+            string label = a.IsPlayer ? "YOU" : a.Name;
+            var s = f.Measure(label, 0.4f);
+            f.Draw(sb, label, new Vector2(ps.X - s.X / 2, ps.Y), col, 0.4f, 0f, Vector2.Zero, true);
+        }
+    }
+
+    /// <summary>Twist banner: drops in from the top at round start, holds, fades. Color = severity.</summary>
+    void DrawTwistBanner(BitmapFont f, Microsoft.Xna.Framework.Graphics.SpriteBatch sb)
+    {
+        var tw = _season.ActiveTwist;
+        if (tw == null || _twistBannerT > 3.4f || _phase == Phase.Countdown) return;
+
+        float t = _twistBannerT;
+        float drop = MathHelper.Clamp(t / 0.45f, 0f, 1f);
+        drop = 1f - (1f - drop) * (1f - drop);            // ease-out
+        float fade = t < 2.6f ? 1f : 1f - (t - 2.6f) / 0.8f;
+        float y = MathHelper.Lerp(-70f, 96f, drop);
+
+        string title = $"TWIST — {tw.Name}";
+        var ts = f.Measure(title, 0.62f);
+        float w = ts.X + 56f;
+        var col = _twistSev * fade;
+
+        Ui.Rect(new Vector2(640 - w / 2, y), new Vector2(w, 46), new Color(8, 8, 18, (int)(200 * fade)));
+        Ui.Frame(new Rectangle((int)(640 - w / 2), (int)y, (int)w, 46), 2, _twistSev * fade);
+        f.Draw(sb, title, new Vector2(640 - ts.X / 2, y + 12), col, 0.62f);
+    }
+
     void DrawHud(BitmapFont f, Microsoft.Xna.Framework.Graphics.SpriteBatch sb, float aspect)
     {
-        // timer (top-left)
+        // timer (top-left) — pulses red under 15 s
         double remain = System.Math.Max(0, _lv.Dto.TimeLimit - _tracker.Time);
         string time = remain.ToString("0.0");
-        var timeCol = remain < 15 ? new Color(255, 90, 90) : Color.White;
+        bool urgent = remain < 15;
+        var timeCol = urgent ? new Color(255, 90, 90) : Color.White;
         Ui.Rect(new Vector2(18, 14), new Vector2(180, 64), new Color(8, 8, 18, 190));
         f.Draw(sb, "TIME", new Vector2(34, 20), new Color(150, 160, 190), 0.45f);
-        f.DrawOutlined(sb, time, new Vector2(34, 36), timeCol, 1.35f);
+        float tScale = urgent ? 1.35f * (1f + 0.05f * MathF.Sin(_tracker.Time * 10f)) : 1.35f;
+        f.DrawOutlined(sb, time, new Vector2(34, 36), timeCol, tScale);
 
         // round banner (top-center)
         string round = $"ROUND {_roundNo}/{_roundTotal} — {_lv.Dto.Name}";
@@ -314,6 +370,12 @@ public sealed class GameplayState : IGameState
         string objective = ObjectiveText();
         var os = f.Measure(objective, 0.5f);
         f.Draw(sb, objective, new Vector2(640, 52), new Color(63, 210, 255), 0.5f, 0f, new Vector2(os.X / 2, 0), true);
+        if (_lv.FallbackMode)
+        {
+            string warn = "UNIMPLEMENTED MODE — RACE RULES APPLY";
+            var ws = f.Measure(warn, 0.45f);
+            f.DrawOutlined(sb, warn, new Vector2(640, 74), new Color(255, 90, 90), 0.45f, 0f, new Vector2(ws.X / 2, 0));
+        }
         if (_season.ActiveTwist != null)
         {
             string tw = $"TWIST: {_season.ActiveTwist.Name}";
@@ -327,19 +389,27 @@ public sealed class GameplayState : IGameState
         Ui.Rect(new Vector2(1280 - 20 - ru.X - 24, 14), new Vector2(ru.X + 24, 40), new Color(8, 8, 18, 190));
         f.Draw(sb, runners, new Vector2(1280 - 32 - ru.X, 24), Color.White, 0.6f);
 
-        // live standings (right side)
+        // live standings (right side): header, player-row highlight, OUT markers, capped
         var sorted = _actors.OrderBy(a => _tracker.LiveRank(a)).ToList();
-        float y = 96;
-        Ui.Rect(new Vector2(1064, y - 8), new Vector2(200, sorted.Count * 30 + 16), new Color(8, 8, 18, 150));
-        foreach (var a in sorted)
+        float y = 118;
+        int shown = System.Math.Min(sorted.Count, 10);
+        Ui.Rect(new Vector2(1064, 88), new Vector2(200, shown * 30 + 52), new Color(8, 8, 18, 165));
+        Ui.Frame(new Rectangle(1064, 88, 200, shown * 30 + 52), 1, new Color(60, 66, 90));
+        f.Draw(sb, "LIVE", new Vector2(1076, 96), new Color(150, 160, 190), 0.42f);
+        for (int i = 0; i < shown; i++)
         {
+            var a = sorted[i];
             int rank = _tracker.LiveRank(a);
+            if (a.IsPlayer) Ui.Rect(new Vector2(1068, y - 4), new Vector2(192, 28), new Color(255, 210, 63, 44));
             var col = a.IsPlayer ? new Color(255, 210, 63) : a.Color;
             string line = $"{rank}  {a.Name}";
             if (a.Finished) line += "  OK";
-            f.Draw(sb, line, new Vector2(1076, y), col, 0.52f, 0f, Vector2.Zero, !a.IsPlayer);
+            if (a.RoundOut) line += "  OUT";
+            f.Draw(sb, line, new Vector2(1076, y), a.RoundOut ? new Color(120, 126, 150) : col, 0.52f, 0f, Vector2.Zero, !a.IsPlayer);
             y += 30;
         }
+        if (sorted.Count > shown)
+            f.Draw(sb, $"+{sorted.Count - shown} MORE", new Vector2(1076, y), new Color(120, 126, 150), 0.42f);
 
         // mode-specific player status (GDD §12 HUD)
         var pl = _actors[0];
@@ -385,12 +455,13 @@ public sealed class GameplayState : IGameState
         f.Draw(sb, potLabel, new Vector2(200, 668), new Color(255, 210, 63), 0.45f);
         f.Draw(sb, Ui.Money(wallet.Risked), new Vector2(200, 682), new Color(255, 235, 150), 0.62f);
 
-        // controls hint during the first seconds
-        if ((_phase == Phase.Countdown || _tracker.Time < 5) && !_pause)
+        // controls hint: bright during the intro seconds, faded afterwards (always readable)
+        if (!_pause)
         {
             string hint = "WASD MOVE · SPACE JUMP · SHIFT DIVE · ESC PAUSE";
-            var hs = f.Measure(hint, 0.45f);
-            f.Draw(sb, hint, new Vector2(1262, 692), new Color(160, 165, 190), 0.45f, 0f, new Vector2(hs.X, 0), true);
+            var hs = f.Measure(hint, 0.42f);
+            bool intro = _phase == Phase.Countdown || _tracker.Time < 5;
+            f.Draw(sb, hint, new Vector2(1262, 694), intro ? new Color(160, 165, 190) : new Color(120, 126, 150, 130), 0.42f, 0f, new Vector2(hs.X, 0), true);
         }
 
         // player marker arrow (projected 3D → screen)
