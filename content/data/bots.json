@@ -2,7 +2,7 @@
  "bots": [
   {
    "name": "NOVA",
-   "color": "#ff4fd8",
+   "color": "#A020F0",
    "personality": {
     "riskTolerance": 0.8,
     "aggression": 0.5,
@@ -14,7 +14,7 @@
   },
   {
    "name": "JAX",
-   "color": "#ff9d2e",
+   "color": "#FF8C00",
    "personality": {
     "riskTolerance": 0.95,
     "aggression": 0.8,
@@ -26,7 +26,7 @@
   },
   {
    "name": "MIRA",
-   "color": "#3fd2ff",
+   "color": "#00CED1",
    "personality": {
     "riskTolerance": 0.3,
     "aggression": 0.2,
@@ -38,7 +38,7 @@
   },
   {
    "name": "TANK",
-   "color": "#8dff3f",
+   "color": "#708090",
    "personality": {
     "riskTolerance": 0.6,
     "aggression": 0.9,
@@ -50,7 +50,7 @@
   },
   {
    "name": "LUXE",
-   "color": "#ffd23f",
+   "color": "#FFD700",
    "personality": {
     "riskTolerance": 0.5,
     "aggression": 0.4,
@@ -62,7 +62,7 @@
   },
   {
    "name": "PIXEL",
-   "color": "#b06bff",
+   "color": "#FF69B4",
    "personality": {
     "riskTolerance": 0.7,
     "aggression": 0.3,
