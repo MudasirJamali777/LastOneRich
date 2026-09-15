@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
 namespace LastOneRich.Core;
@@ -36,6 +37,32 @@ public static class Input
 
     /// <summary>Mouse movement in pixels since the previous Update. Zero unless captured.</summary>
     public static Vector2 MouseDelta => _delta;
+
+    /// <summary>Raw cursor position in backbuffer pixels.</summary>
+    public static Vector2 MousePixels => new(_mouse.X, _mouse.Y);
+
+    /// <summary>Left button held this frame.</summary>
+    public static bool MouseLeftHeld => _mouse.LeftButton == ButtonState.Pressed;
+
+    /// <summary>Left button went down this frame (edge).</summary>
+    public static bool MouseLeftPressed =>
+        _mouse.LeftButton == ButtonState.Pressed && _mousePrev.LeftButton == ButtonState.Released;
+
+    /// <summary>True when the cursor moved since the last frame (used to switch menus to mouse focus).</summary>
+    public static bool MouseMoved => _mouse.X != _mousePrev.X || _mouse.Y != _mousePrev.Y;
+
+    /// <summary>
+    /// Cursor position mapped into the virtual 1280x720 UI canvas, matching Ui.ComputeTransform.
+    /// Letterbox margins map outside the 0..1280 / 0..720 range, so hit tests simply miss there.
+    /// </summary>
+    public static Vector2 MouseUi(Viewport vp)
+    {
+        float s = System.MathF.Min(vp.Width / (float)Ui.W, vp.Height / (float)Ui.H);
+        if (s <= 0.0001f) return new Vector2(-1f, -1f);
+        float ox = (vp.Width - Ui.W * s) * 0.5f;
+        float oy = (vp.Height - Ui.H * s) * 0.5f;
+        return new Vector2((_mouse.X - ox) / s, (_mouse.Y - oy) / s);
+    }
 
     /// <summary>Hide + lock the cursor to the window centre, or release it back to the OS.</summary>
     public static void SetMouseCapture(bool on)
@@ -145,6 +172,20 @@ public static class Input
     public static bool PausePressed => PressedAction("Pause") || GpPressed(Buttons.Start);
     public static bool UpPressed => PressedAction("MoveForward") || GpPressed(Buttons.DPadUp);
     public static bool DownPressed => PressedAction("MoveBack") || GpPressed(Buttons.DPadDown);
+
+    // Analog stick treated as a digital d-pad for menu navigation (edge-detected so a
+    // held stick moves the cursor one step, not one per frame).
+    static bool StickUp(GamePadState s) => s.ThumbSticks.Left.Y > 0.55f;
+    static bool StickDown(GamePadState s) => s.ThumbSticks.Left.Y < -0.55f;
+
+    /// <summary>Menu "up": keys, d-pad, or a flick of the left stick.</summary>
+    public static bool MenuUpPressed => UpPressed || (StickUp(_gp) && !StickUp(_gpPrev));
+
+    /// <summary>Menu "down": keys, d-pad, or a flick of the left stick.</summary>
+    public static bool MenuDownPressed => DownPressed || (StickDown(_gp) && !StickDown(_gpPrev));
+
+    /// <summary>Menu "cancel"/back: ESC (Pause binding) or gamepad B.</summary>
+    public static bool CancelPressed => PressedAction("Pause") || GpPressed(Buttons.B);
     public static bool LeftPressed => PressedAction("MoveLeft") || GpPressed(Buttons.DPadLeft);
     public static bool RightPressed => PressedAction("MoveRight") || GpPressed(Buttons.DPadRight);
     public static bool Num1Pressed => Pressed(Keys.D1, Keys.NumPad1) || GpPressed(Buttons.LeftShoulder);
