@@ -66,6 +66,31 @@ exponentially smoothed chase camera, and **explicit render-state isolation** bet
 3D passes and every SpriteBatch/UI pass.
 | `--overlay` | start with the F3 debug overlay visible |
 | `--shot=path.png --shot-frame=N` | save a screenshot at frame N, then exit |
+| `--safe` | neither read nor write `saves/settings.json` for this run, so a saved display mode can never lock you out of booting |
+
+`--safe` is also what the game does **by itself** if a launch that applied a non-default
+resolution/fullscreen never reached its first rendered frame: `saves/.boot-probe` is armed before
+the device is created and cleared by the first successful `Draw`, and a leftover probe means
+"boot once with the settings ignored" (the file stays intact and is retried next launch).
+
+### Settings (menu ▸ SETTINGS, or pause ▸ SETTINGS)
+
+One screen, two entry points (`States/SettingsScreen.cs`), four tabs:
+
+| tab | rows |
+|---|---|
+| GRAPHICS | resolution (6 modes), fullscreen, VSync, FOV 50–100°, fog |
+| AUDIO | master / music / SFX volume, 0–100 |
+| CONTROLS | mouse sensitivity (% of default), invert Y, camera distance |
+| GAMEPLAY | difficulty — CASUAL / STANDARD / HARDCORE (rival pace + drone patrol speed; player physics untouched) |
+
+Everything is stored in the **existing** `ControlsDTO` (`Keybinds.Settings`) — no second settings
+model — and persisted to `saves/settings.json` beside `saves/save.json`. `content/data/controls.json`
+stays the shipped default; the save file overlays it at startup, field by field, and always wins.
+Edits save as you make them and apply live (audio faders, FOV, fog, VSync, camera, sensitivity,
+difficulty-on-next-round) except **resolution / fullscreen**, which queue behind an
+`APPLY & RESTART` prompt because flipping the swapchain under a live player is never a surprise
+you want. Hand-editable extras: `cameraHeight`, `pitchMinDeg`, `pitchMaxDeg`.
 
 ---
 

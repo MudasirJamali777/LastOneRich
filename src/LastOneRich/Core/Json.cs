@@ -16,6 +16,14 @@ public static class Json
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
+    /// <summary>
+    /// Write options share Options' semantics (case-insensitive, field-inclusive) and only add
+    /// indentation. Previously Save() used a fresh options object, so anything written here did not
+    /// round-trip through Load() identically — matters now that saves/settings.json is a live file.
+    /// WriteIndented only affects layout, never parsing, so reusing it for reads stays safe.
+    /// </summary>
+    public static readonly JsonSerializerOptions WriteOptions = new(Options) { WriteIndented = true };
+
     public static string ContentRoot => Path.Combine(AppContext.BaseDirectory, "content");
 
     public static string PathFor(string relative) => Path.Combine(ContentRoot, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -31,6 +39,6 @@ public static class Json
     {
         var dir = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        File.WriteAllText(fullPath, JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(fullPath, JsonSerializer.Serialize(value, WriteOptions));
     }
 }

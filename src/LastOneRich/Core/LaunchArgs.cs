@@ -8,6 +8,13 @@ public sealed class LaunchArgs
     public bool Overlay;       // start with the F3 debug overlay visible
     public int Round = 1;      // dev shortcut with --goto=game: start at this season round
 
+    /// <summary>
+    /// --safe: ignore saves/settings.json's resolution / fullscreen for this run. A bad saved
+    /// mode should never be able to lock a player (or a reviewer) out of the game; settings.json
+    /// stays untouched, so the next normal launch retries it.
+    /// </summary>
+    public bool SafeMode;
+
     public static LaunchArgs Parse(string[] args)
     {
         var a = new LaunchArgs();
@@ -22,6 +29,7 @@ public sealed class LaunchArgs
                 case "shot": a.ShotPath = val; break;
                 case "goto": a.Goto = val.ToLowerInvariant(); break;
                 case "overlay": a.Overlay = true; break;
+                case "safe": a.SafeMode = true; break;
                 case "shot-frame": int.TryParse(val, out a.ShotFrame); break;
                 case "round": int.TryParse(val, out a.Round); break;
             }
