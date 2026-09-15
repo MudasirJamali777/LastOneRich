@@ -35,8 +35,7 @@ public sealed class GameplayState : IGameState
     float _endHold = 2.2f;
 
     bool _pause;
-    int _pauseSel;
-    static readonly string[] PauseItems = { "RESUME", "RESTART ROUND", "QUIT TO MENU" };
+    readonly PauseMenu _pauseMenu = new();
 
     // Mouse-look: the boom is driven by Camera3D.Yaw/Pitch; the player body turns to match.
     float _bodyYaw;
@@ -202,7 +201,7 @@ public sealed class GameplayState : IGameState
         if (Input.PausePressed)
         {
             _pause = true;
-            _pauseSel = 0;
+            _pauseMenu.Open();
             Input.SetMouseCapture(false);
             GameServices.Audio.Event("blip");
             return;
@@ -316,39 +315,27 @@ public sealed class GameplayState : IGameState
 
     void UpdatePause(float dt)
     {
-        // Mouse stays released for the whole pause.
+        // Cursor stays visible and free for the whole pause, in every sub-page.
         Input.SetMouseCapture(false);
 
-        if (Input.UpPressed) { _pauseSel = (_pauseSel + PauseItems.Length - 1) % PauseItems.Length; GameServices.Audio.Event("blip"); }
-        if (Input.DownPressed) { _pauseSel = (_pauseSel + 1) % PauseItems.Length; GameServices.Audio.Event("blip"); }
-
-        // ESC always resumes, whatever the cursor is sitting on (bug fix 2).
-        if (Input.PausePressed)
+        switch (_pauseMenu.Update(dt, GameServices.Gfx.Viewport))
         {
-            _pause = false;
-            GameServices.Audio.Event("blip");
-            SyncMouseCapture();
-            return;
-        }
+            case PauseMenu.Result.Resume:
+                _pause = false;
+                SyncMouseCapture();   // recapture only if the round is still live
+                break;
 
-        if (Input.ConfirmPressed)
-        {
-            switch (_pauseSel)
-            {
-                case 0:
-                    _pause = false;
-                    GameServices.Audio.Event("blip");
-                    SyncMouseCapture();
-                    break;
-                case 1:
-                    GameServices.Audio.Event("blip");
-                    _sm.Replace(new GameplayState(_sm, _season));
-                    break;
-                case 2:
-                    GameServices.Audio.Event("blip");
-                    _sm.Replace(new MainMenuState(_sm));
-                    break;
-            }
+            case PauseMenu.Result.RestartRound:
+                _sm.Replace(new GameplayState(_sm, _season));
+                break;
+
+            case PauseMenu.Result.QuitToMenu:
+                _sm.Replace(new MainMenuState(_sm));
+                break;
+
+            case PauseMenu.Result.QuitToDesktop:
+                _sm.Quit();           // empties the machine; LorGame.Update then exits
+                break;
         }
     }
 
@@ -392,7 +379,7 @@ public sealed class GameplayState : IGameState
 
         if (_phase == Phase.Countdown) DrawCountdown(f, sb);
         if (!string.IsNullOrEmpty(_finishBanner) && _phase != Phase.Countdown) DrawFinishBanner(f, sb);
-        if (_pause) DrawPause(f, sb);
+        if (_pause) _pauseMenu.Draw(f, sb);
 
         _fx.Draw(sb);
         Ui.End();
@@ -589,21 +576,5 @@ public sealed class GameplayState : IGameState
         f.DrawOutlined(sb, _finishBanner, new Vector2(640, 214), new Color(255, 235, 150), 1.0f, 0f, new Vector2(size.X / 2, 0));
         if (_phase == Phase.Ended)
             f.Draw(sb, "RACE COMPLETE", new Vector2(640, 270), new Color(200, 205, 230), 0.55f, 0f, new Vector2(f.Measure("RACE COMPLETE", 0.55f).X / 2, 0), true);
-    }
-
-    void DrawPause(BitmapFont f, Microsoft.Xna.Framework.Graphics.SpriteBatch sb)
-    {
-        Ui.Rect(new Vector2(0, 0), new Vector2(1280, 720), new Color(5, 5, 12, 190));
-        string title = "PAUSED";
-        var ts = f.Measure(title, 1.4f);
-        f.DrawOutlined(sb, title, new Vector2(640, 190), Color.White, 1.4f, 0f, new Vector2(ts.X / 2, 0));
-        for (int i = 0; i < PauseItems.Length; i++)
-        {
-            bool sel = i == _pauseSel;
-            var size = f.Measure(PauseItems[i], 0.9f);
-            var pos = new Vector2(640, 320 + i * 66);
-            if (sel) Ui.Rect(new Vector2(640 - size.X / 2 - 24, pos.Y - 10), new Vector2(size.X + 48, size.Y + 18), new Color(255, 210, 63, 45));
-            f.DrawOutlined(sb, PauseItems[i], pos, sel ? new Color(255, 240, 180) : new Color(185, 190, 215), 0.9f, 0f, new Vector2(size.X / 2, 0));
-        }
     }
 }
