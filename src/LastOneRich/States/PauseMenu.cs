@@ -5,8 +5,9 @@ using Microsoft.Xna.Framework.Graphics;
 namespace LastOneRich.States;
 
 /// <summary>
-/// Self-contained pause overlay: root menu, a Settings placeholder (Priority 3 fills it in)
-/// and a confirmation dialog for quitting a run.
+/// Self-contained pause overlay: root menu, the Settings screen (Priority 3 — this page hosts the
+/// shared SettingsScreen control, so the main menu and the pause menu edit the same thing) and a
+/// confirmation dialog for quitting a run.
 ///
 /// It owns no game state and never ticks the world — GameplayState freezes everything and
 /// forwards only this Update. Keyboard, gamepad and mouse all drive the same selection index,
@@ -26,11 +27,13 @@ public sealed class PauseMenu
     int _sel;
     int _confirmSel;            // defaults to NO — the safe option
     float _t;                   // animation clock for the panel slide/fade
+    bool _settingsOpened;       // guard so Close() (and its save) runs exactly once per visit
+
+    readonly SettingsScreen _settings = new();
 
     // Hit rectangles are rebuilt every Draw so mouse tests always match what is on screen.
     readonly List<Rectangle> _rootRects = new();
     readonly List<Rectangle> _confirmRects = new();
-    Rectangle _settingsBackRect;
 
     /// <summary>Reset to a clean root menu. Called each time the game is paused.</summary>
     public void Open()
@@ -39,6 +42,7 @@ public sealed class PauseMenu
         _sel = 0;
         _confirmSel = 0;
         _t = 0f;
+        _settingsOpened = false;
         _rootRects.Clear();
         _confirmRects.Clear();
     }
@@ -53,7 +57,7 @@ public sealed class PauseMenu
         switch (_page)
         {
             case Page.Root: return UpdateRoot(m, moved, click);
-            case Page.Settings: return UpdateSettings(m, moved, click);
+            case Page.Settings: return UpdateSettings(dt, vp);
             case Page.ConfirmQuit: return UpdateConfirm(m, moved, click);
         }
         return Result.None;
@@ -62,7 +66,7 @@ public sealed class PauseMenu
     Result UpdateRoot(Vector2 m, bool moved, bool click)
     {
         // ESC / B on the root page resumes — never quits.
-        if (Input.PausePressed || Input.CancelPressed) { Blip(); return Result.Resume; }
+        if (Input.PausePressed || Input.CancelPressed) { Blip(); return Leave(); }
 
         if (Input.MenuUpPressed) { _sel = (_sel + RootItems.Length - 1) % RootItems.Length; Blip(); }
         if (Input.MenuDownPressed) { _sel = (_sel + 1) % RootItems.Length; Blip(); }
@@ -78,21 +82,39 @@ public sealed class PauseMenu
         Blip();
         switch (_sel)
         {
-            case 0: return Result.Resume;
-            case 1: return Result.RestartRound;
-            case 2: _page = Page.Settings; return Result.None;
+            case 0: return Leave();
+            case 1: CloseSettings(); return Result.RestartRound;
+            case 2: _page = Page.Settings; _settings.Open(); _settingsOpened = true; return Result.None;
             case 3: _page = Page.ConfirmQuit; _confirmSel = 0; return Result.None;
-            case 4: return Result.QuitToDesktop;
+            case 4: CloseSettings(); return Result.QuitToDesktop;
         }
         return Result.None;
     }
 
-    Result UpdateSettings(Vector2 m, bool moved, bool click)
+    Result UpdateSettings(float dt, Viewport vp)
     {
-        bool back = Input.PausePressed || Input.CancelPressed || Input.ConfirmPressed
-                    || (click && _settingsBackRect.Contains((int)m.X, (int)m.Y));
-        if (back) { Blip(); _page = Page.Root; _sel = 2; }
+        if (_settings.Update(dt, vp) == SettingsScreen.Result.Back)
+        {
+            CloseSettings();
+            _page = Page.Root;
+            _sel = 2;               // land back on SETTINGS, where the player came from
+        }
         return Result.None;
+    }
+
+    /// <summary>Leave the pause menu for any reason: flush pending settings edits first.</summary>
+    Result Leave()
+    {
+        CloseSettings();
+        return Result.Resume;
+    }
+
+    void CloseSettings()
+    {
+        if (!_settingsOpened) return;
+        _settingsOpened = false;
+        _settings.Close();          // writes saves/settings.json if anything actually changed
+        _t = 0f;                    // replay the slide so the root menu reads as a fresh page
     }
 
     Result UpdateConfirm(Vector2 m, bool moved, bool click)
@@ -114,7 +136,7 @@ public sealed class PauseMenu
         if (!activate) return Result.None;
 
         Blip();
-        if (_confirmSel == 1) return Result.QuitToMenu;
+        if (_confirmSel == 1) { CloseSettings(); return Result.QuitToMenu; }
         _page = Page.Root;
         _sel = 3;
         return Result.None;
@@ -133,14 +155,21 @@ public sealed class PauseMenu
 
     public void Draw(BitmapFont f, SpriteBatch sb)
     {
+        // The Settings screen owns the whole canvas (including its own backdrop), so the pause
+        // panel and its dim pass must not double up underneath it.
+        if (_page == Page.Settings)
+        {
+            _settings.Draw(f, sb);
+            return;
+        }
+
         // Dim the frozen frame behind the overlay.
         Ui.Rect(new Vector2(0, 0), new Vector2(Ui.W, Ui.H), new Color(5, 5, 12, 200));
 
         switch (_page)
         {
-            case Page.Root: DrawRoot(f, sb); break;
-            case Page.Settings: DrawSettings(f, sb); break;
             case Page.ConfirmQuit: DrawRoot(f, sb, dimmed: true); DrawConfirm(f, sb); break;
+            default: DrawRoot(f, sb); break;
         }
     }
 
@@ -196,34 +225,6 @@ public sealed class PauseMenu
             var hs = f.Measure(hint, 0.42f);
             f.Draw(sb, hint, new Vector2(Ui.W / 2f, panel.Bottom + 18), new Color(140, 148, 175), 0.42f, 0f, new Vector2(hs.X / 2f, 0), true);
         }
-    }
-
-    void DrawSettings(BitmapFont f, SpriteBatch sb)
-    {
-        var panel = new Rectangle(300, 180, 680, 360);
-        Ui.Rect(panel, new Color(14, 16, 30, 245));
-        Ui.Frame(panel, 3, new Color(63, 210, 255));
-
-        string title = "SETTINGS";
-        var ts = f.Measure(title, 1.3f);
-        f.DrawOutlined(sb, title, new Vector2(Ui.W / 2f, panel.Y + 34), new Color(63, 210, 255), 1.3f, 0f, new Vector2(ts.X / 2f, 0));
-
-        string msg = "COMING SOON";
-        var ms = f.Measure(msg, 0.9f);
-        f.Draw(sb, msg, new Vector2(Ui.W / 2f, panel.Y + 140), new Color(215, 220, 240), 0.9f, 0f, new Vector2(ms.X / 2f, 0), true);
-
-        string sub = "GRAPHICS · AUDIO · CONTROLS · GAMEPLAY";
-        var ss = f.Measure(sub, 0.5f);
-        f.Draw(sb, sub, new Vector2(Ui.W / 2f, panel.Y + 190), new Color(130, 138, 165), 0.5f, 0f, new Vector2(ss.X / 2f, 0), true);
-
-        _settingsBackRect = new Rectangle(Ui.W / 2 - 110, panel.Bottom - 84, 220, 52);
-        var mp = Input.MouseUi(GameServices.Gfx.Viewport);
-        bool hover = _settingsBackRect.Contains((int)mp.X, (int)mp.Y);
-        Ui.Rect(_settingsBackRect, hover ? new Color(63, 210, 255, 60) : new Color(255, 255, 255, 22));
-        Ui.Frame(_settingsBackRect, 2, hover ? new Color(63, 210, 255) : new Color(90, 96, 120));
-        var bs = f.Measure("BACK", 0.8f);
-        f.DrawOutlined(sb, "BACK", new Vector2(Ui.W / 2f, _settingsBackRect.Y + 12),
-            hover ? new Color(200, 240, 255) : new Color(200, 205, 230), 0.8f, 0f, new Vector2(bs.X / 2f, 0));
     }
 
     void DrawConfirm(BitmapFont f, SpriteBatch sb)

@@ -21,6 +21,25 @@ public sealed class LorGame : Game
     {
         _gfx = new GraphicsDeviceManager(this);
         _launch = launch;
+
+        // Boot safety, decided before anything reads the display settings:
+        //   --safe            → opt out by hand
+        //   stale boot probe  → the previous launch applied a mode and never reached a frame,
+        //                       so ignore the overrides ONCE (settings.json is left intact and
+        //                       retried next time, which is when the player can fix it in-game)
+        bool rescue = launch?.SafeMode == true;
+        if (!rescue && SettingsStore.BootProbeStale())
+        {
+            rescue = true;
+            SettingsStore.ClearStaleProbe();
+        }
+        SettingsStore.IgnoreOverrides = rescue;
+
+        // File IO + reflection only, so it is legal this early; Initialize reuses the cache.
+        Keybinds.EnsureLoaded();
+        if (!rescue && SettingsStore.GraphicsDifferFromSafeDefaults())
+            SettingsStore.ArmBootProbe();
+
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         Window.Title = "LAST ONE RICH! — Volt Dome (Season 1)";
@@ -32,15 +51,24 @@ public sealed class LorGame : Game
 
         // Fixed 60 Hz simulation + vsync: physics runs at the exact rate the render
         // loop interpolates over (jitter fix 3A/3B). dt is always 1/60 in Update.
+        // VSync here is only the default — the real value is taken from settings below,
+        // because IsFixedTimeStep = true keeps simulating at 60 Hz regardless.
         IsFixedTimeStep = true;
         TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
     }
 
     protected override void Initialize()
     {
-        _gfx.PreferredBackBufferWidth = 1280;
-        _gfx.PreferredBackBufferHeight = 720;
-        _gfx.ApplyChanges();
+        // Player settings win over the 1280x720 default BEFORE the device is created, so the
+        // window opens at the saved size/state (EnsureLoaded reads saves/settings.json).
+        Keybinds.EnsureLoaded();
+        _gfx.PreferredBackBufferWidth = Keybinds.ResolutionWidth;
+        _gfx.PreferredBackBufferHeight = Keybinds.ResolutionHeight;
+        _gfx.IsFullScreen = Keybinds.Fullscreen;
+        _gfx.SynchronizeWithVerticalRetrace = Keybinds.VSync;
+
+        // base.Initialize() creates the device from the manager's pending parameters, so the
+        // saved resolution is already baked in by the time LoadContent runs.
         base.Initialize();
     }
 
@@ -49,6 +77,8 @@ public sealed class LorGame : Game
         var sb = new SpriteBatch(GraphicsDevice);
         Input.AttachHost(this); // enables mouse capture for gameplay mouse-look
         GameServices.Init(GraphicsDevice, sb, _launch);
+        AudioBank.ApplyVolumes();                 // settings ▸ Audio takes effect before the first sound
+        _gfx.SynchronizeWithVerticalRetrace = Keybinds.VSync; // live VSync (no device reset needed)
         if (_launch?.Overlay == true) GameServices.DebugOverlay = true;
         _states = new StateMachine();
         _states.Replace(new BootState(_states));
@@ -62,6 +92,11 @@ public sealed class LorGame : Game
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
         _states.Update(dt);
+
+        // Safe point for resolution / fullscreen: after the state's Update, long before BeginDraw,
+        // so resetting the device can never land between a begin/end pair.
+        SettingsStore.ApplyPendingGraphics(_gfx);
+
         _lastUpdate = _clock.Elapsed.TotalSeconds;
         base.Update(gameTime);
         if (_states.IsEmpty) Exit();
@@ -77,9 +112,17 @@ public sealed class LorGame : Game
         double step = TargetElapsedTime.TotalSeconds;
         InterpAlpha = (float)System.Math.Clamp((_clock.Elapsed.TotalSeconds - _lastUpdate) / step, 0.0, 1.0);
 
+        // Settings ▸ Graphics ▸ FOG, applied once for every state so the menu backdrop and the
+        // cutscenes respect the same switch the player just flipped (default true = as before).
+        GeometryRenderer.FogOn = Keybinds.FogEnabled;
+
         _states.Draw();
         if (GameServices.DebugOverlay) DrawDebugOverlay();
         base.Draw(gameTime);
+
+        // A frame survived a present, so the saved display mode is good: disarm the boot probe
+        // (no-op on every later frame, and no disk traffic at all when nothing was armed).
+        SettingsStore.ClearBootProbe();
 
         if (_launch?.ShotFrame >= 0 && _frame >= _launch.ShotFrame && !string.IsNullOrEmpty(_launch.ShotPath))
         {

@@ -27,6 +27,22 @@ public class Camera3D
     public float PitchMinDeg = -25f;
     public float PitchMaxDeg = 60f;
 
+    /// <summary>
+    /// Pitch cone, read once at construction from controls.json (pitchMinDeg / pitchMaxDeg —
+    /// file-only on purpose, the menu's four tabs stay uncluttered). The per-instance fields above
+    /// still win if a caller sets them explicitly, which is how the backdrop and cutscene cameras
+    /// keep their own framing. Defaults are -25 / 60 exactly as before, so nothing changes
+    /// unless someone edits the JSON.
+    /// </summary>
+    static float DefaultPitchMin => (float)System.Math.Clamp(Keybinds.Settings.PitchMinDeg, -80.0, 0.0);
+    static float DefaultPitchMax => (float)System.Math.Clamp(Keybinds.Settings.PitchMaxDeg, 5.0, 85.0);
+
+    public Camera3D()
+    {
+        PitchMinDeg = DefaultPitchMin;
+        PitchMaxDeg = DefaultPitchMax;
+    }
+
     public Matrix View => Matrix.CreateLookAt(Position, LookAt, Vector3.Up);
 
     /// <summary>Camera right axis in world space — the direction that appears as screen-right.</summary>

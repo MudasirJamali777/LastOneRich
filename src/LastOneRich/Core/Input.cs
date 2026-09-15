@@ -48,6 +48,10 @@ public static class Input
     public static bool MouseLeftPressed =>
         _mouse.LeftButton == ButtonState.Pressed && _mousePrev.LeftButton == ButtonState.Released;
 
+    /// <summary>Right button went down this frame (edge) — sliders use it to step down.</summary>
+    public static bool MouseRightPressed =>
+        _mouse.RightButton == ButtonState.Pressed && _mousePrev.RightButton == ButtonState.Released;
+
     /// <summary>True when the cursor moved since the last frame (used to switch menus to mouse focus).</summary>
     public static bool MouseMoved => _mouse.X != _mousePrev.X || _mouse.Y != _mousePrev.Y;
 
@@ -128,7 +132,10 @@ public static class Input
     public static bool HeldAction(string action) => Keybinds.Held(_cur, action);
     public static bool PressedAction(string action) => Keybinds.Pressed(_cur, _prev, action);
 
-    static bool GpPressed(Buttons b) => _gp.IsButtonDown(b) && !_gpPrev.IsButtonDown(b);
+    /// <summary>Gamepad button edge. Public so UI screens can name the button they consume
+    /// (the Settings screen deliberately does not use ConfirmPressed there: Confirm includes E,
+    /// which is that screen's "next tab" key).</summary>
+    public static bool GpPressed(Buttons b) => _gp.IsButtonDown(b) && !_gpPrev.IsButtonDown(b);
 
     /// <summary>
     /// Raw move intent in LOCAL space: +X = strafe right, +Y = forward.

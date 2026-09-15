@@ -54,6 +54,14 @@ public sealed class GeometryRenderer
     VertexBuffer _vb;
     int _vbCap;
 
+    /// <summary>
+    /// Depth-fog switch (Settings ▸ Graphics ▸ FOG). Applied at the top of every BeginFrame, so
+    /// toggling it is visible immediately — including while the pause menu is on screen.
+    /// The instance-level BasicEffect state stays in one place on purpose: nothing else may
+    /// touch FogEnabled or the lit/unlit passes would disagree.
+    /// </summary>
+    public static bool FogOn = true;
+
     public GeometryRenderer(GraphicsDevice gd)
     {
         _gd = gd;
@@ -93,6 +101,7 @@ public sealed class GeometryRenderer
         _alpha.Clear();
         _fx.View = cam.View;
         _fx.Projection = cam.Projection(aspect);
+        _fx.FogEnabled = FogOn;
         _fx.FogColor = sky.ToVector3();
     }
 
