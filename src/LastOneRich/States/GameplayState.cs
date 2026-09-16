@@ -150,6 +150,12 @@ public sealed class GameplayState : IGameState
             else _bots.Add(new BotController(_lv.Graph, c.Personality, _bots.Count + 1));
         }
 
+        // Difficulty (Settings ▸ Gameplay) is applied HERE rather than inside World code, so the
+        // physics/AI layer keeps zero UI dependencies and HeadlessSim runs at the 1.0 defaults.
+        Phys.BotPaceMult = Keybinds.DifficultyBotPaceMult;
+        Phys.HazardMult = Keybinds.DifficultyHazardMult;
+        foreach (var d in _lv.Drones) d.Speed *= Phys.HazardMult;   // drone patrols (StrikesOut)
+
         _tracker = new RaceTracker(_actors, _lv);
         _season.Tracker = _tracker;
         if (_season.Upgrades.Contains("shield"))
@@ -363,6 +369,9 @@ public sealed class GameplayState : IGameState
         float aspect = vp.Width / (float)vp.Height;
         GameServices.Gfx.Clear(_lv.SkyColor);
         var r = GameServices.Renderer;
+        // Settings ▸ Graphics ▸ FOV, pushed per draw so a change made in the pause menu is
+        // visible on the frozen frame behind it (fog is applied globally in LorGame.Draw).
+        _cam.FovDeg = Keybinds.FovDeg;
         r.BeginFrame(_cam, aspect, _lv.SkyColor);
         _lv.Draw(r);
         float alpha = LorGame.InterpAlpha;

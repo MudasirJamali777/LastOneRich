@@ -13,10 +13,13 @@ public sealed class SaveData
 
 public static class SaveSystem
 {
-    /// <summary>saves/ next to the executable — keeps the Steam build self-contained and portable.</summary>
-    static string Dir() => Path.Combine(AppContext.BaseDirectory, "saves");
+    /// <summary>
+    /// saves/ next to the executable — keeps the Steam build self-contained and portable.
+    /// Public so sibling stores (SettingsStore) share one location convention instead of re-deriving it.
+    /// </summary>
+    public static string Dir => Path.Combine(AppContext.BaseDirectory, "saves");
 
-    static string PathFor() => Path.Combine(Dir(), "save.json");
+    static string PathFor() => Path.Combine(Dir, "save.json");
 
     public static SaveData Load()
     {

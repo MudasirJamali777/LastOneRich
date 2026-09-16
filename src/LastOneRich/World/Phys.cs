@@ -20,6 +20,16 @@ public static class Phys
     public const float StepUp = 0.55f;
     public const float BotBaseFactor = 0.92f;
 
+    // ---- Priority 3: difficulty hooks, written by GameplayState from Keybinds ----
+    // Plain multipliers kept HERE (not a Keybinds read inside World code) so the World/physics
+    // layer stays free of UI dependencies and HeadlessSim — which never assigns these — runs
+    // byte-identical at 1.0.
+    /// <summary>Scales rival run speed only. The player's own physics is never touched.</summary>
+    public static float BotPaceMult = 1f;
+
+    /// <summary>Scales hazard intensity (drone patrol speed) at round entry.</summary>
+    public static float HazardMult = 1f;
+
     public static void Approach(ref float value, float target, float rate, float dt)
     {
         float delta = target - value;

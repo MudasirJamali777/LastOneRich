@@ -7,13 +7,15 @@ namespace LastOneRich.States;
 
 public sealed class MainMenuState : IGameState
 {
-    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "QUIT" };
+    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "SETTINGS", "QUIT" };
 
     readonly StateMachine _sm;
     Level _level;
     ArenaBackdrop _bg;
     int _sel;
     bool _howTo;
+    bool _settingsOpen;
+    readonly SettingsScreen _settings = new();
     float _t;
 
     public MainMenuState(StateMachine sm) => _sm = sm;
@@ -38,6 +40,19 @@ public sealed class MainMenuState : IGameState
             return;
         }
 
+        // Settings overlay: the screen owns its own navigation, and backs out with ESC / B.
+        if (_settingsOpen)
+        {
+            if (_settings.Update(dt, GameServices.Gfx.Viewport) == SettingsScreen.Result.Back)
+            {
+                _settings.Close();        // flushes edits to saves/settings.json
+                _settingsOpen = false;
+                _sel = 2;                 // land back on SETTINGS
+                GameServices.Audio.Event("blip");
+            }
+            return;                       // the menu list itself is inert while settings is up
+        }
+
         if (Input.UpPressed) { _sel = (_sel + Items.Length - 1) % Items.Length; GameServices.Audio.Event("blip"); }
         if (Input.DownPressed) { _sel = (_sel + 1) % Items.Length; GameServices.Audio.Event("blip"); }
 
@@ -57,6 +72,10 @@ public sealed class MainMenuState : IGameState
                     _howTo = true;
                     break;
                 case 2:
+                    _settings.Open();
+                    _settingsOpen = true;
+                    break;
+                case 3:
                     _sm.Quit();
                     break;
             }
@@ -84,9 +103,10 @@ public sealed class MainMenuState : IGameState
         f.Draw(sb, sub, new Vector2(640, 140), new Color(200, 210, 255), 0.62f, 0f, new Vector2(ss.X / 2, 0), true);
 
         // menu items
+        bool overlay = _howTo || _settingsOpen;
         for (int i = 0; i < Items.Length; i++)
         {
-            bool selected = i == _sel && !_howTo;
+            bool selected = i == _sel && !overlay;
             var size = f.Measure(Items[i], 1.05f);
             var pos = new Vector2(640, 300 + i * 74);
             if (selected)
@@ -106,6 +126,7 @@ public sealed class MainMenuState : IGameState
         f.Draw(sb, career, new Vector2(640, 668), new Color(150, 160, 190), 0.55f, 0f, new Vector2(cs.X / 2, 0), true);
 
         if (_howTo) DrawHowTo(f);
+        if (_settingsOpen) _settings.Draw(f, sb);
 
         Ui.End();
     }

@@ -13,8 +13,44 @@ public sealed class AudioBank
 
     public bool Enabled { get; private set; } = true;
 
+    // ---- Priority 3: volume knobs driven by the Settings menu (0..1) ----
+    // Read on every play, so a slider change is audible on the very next blip — no restart,
+    // no re-load of clips. Defaults reproduce the pre-settings behaviour exactly
+    // (sfx kept its historical 0.9 headroom dip, music its 0.45 bed level).
+    public static float MasterVolume = 1f;
+    public static float MusicVolume = 0.45f;
+    public static float SfxVolume = 0.9f;
+
+    /// <summary>
+    /// The live bank, so the STATIC fader push can reach the one thing statics cannot: the
+    /// already-playing music instance. Single-instance service, same idea as GameServices.
+    /// </summary>
+    static AudioBank _current;
+
+    /// <summary>
+    /// Push the stored settings into the three faders and onto the playing music bed.
+    /// Safe to call at any time, including before LoadContent (then it only sets the statics).
+    /// </summary>
+    public static void ApplyVolumes()
+    {
+        MasterVolume = Keybinds.MasterVolume;
+        MusicVolume = Keybinds.MusicVolume;
+        SfxVolume = (Keybinds.SfxVolume / 100f) * 0.9f;
+        _current?.PushMusicVolume();
+    }
+
+    void PushMusicVolume()
+    {
+        if (_music == null) return;
+        try { _music.Volume = BedVolume * MusicVolume * MasterVolume; } catch { }
+    }
+
+    /// <summary>The music bed level set by the last PlayMusic call (defaults to its 0.45 argument).</summary>
+    float BedVolume = 0.45f;
+
     public AudioBank(string dir)
     {
+        _current = this;    // lets the static fader push reach this bank's playing music
         try
         {
             foreach (var path in Directory.GetFiles(dir, "*.wav"))
@@ -39,7 +75,7 @@ public sealed class AudioBank
         try
         {
             if (_sfx.TryGetValue(name.ToLowerInvariant(), out var sfx))
-                sfx.Play(volume * 0.9f, MathHelper.Clamp(pitch, -1f, 1f), pan);
+                sfx.Play(volume * SfxVolume * MasterVolume, MathHelper.Clamp(pitch, -1f, 1f), pan);
         }
         catch { Enabled = false; } // device vanished / never existed — go silent
     }
@@ -47,6 +83,8 @@ public sealed class AudioBank
     public void PlayMusic(float volume = 0.45f)
     {
         if (!Enabled) return;
+        BedVolume = volume;   // remember the caller's bed so a later fader change keeps it
+        ApplyVolumes();       // stays in sync with the Settings menu even if a caller passes a volume
         if (_music == null && _sfx.TryGetValue("music_loop", out var m))
         {
             _music = m.CreateInstance();
@@ -56,7 +94,9 @@ public sealed class AudioBank
         {
             try
             {
-                _music.Volume = volume;
+                // BedVolume = the caller's bed level; MusicVolume is the player's music fader,
+                // MasterVolume the global one (0.45 and 1 respectively = the old behaviour).
+                _music.Volume = volume * MusicVolume * MasterVolume;
                 if (_music.State != Microsoft.Xna.Framework.Audio.SoundState.Playing) _music.Play();
             }
             catch { Enabled = false; }

@@ -26,8 +26,13 @@ public sealed class BotController
         _lane = ((laneSeed % 3) - 1) * 1.2f;
     }
 
+    /// <summary>
+    /// Rival top speed. Phys.BotPaceMult is the difficulty knob (Settings ▸ Gameplay): 1.0 at
+    /// STANDARD, so the default path is bit-identical to before, and HeadlessSim — which never
+    /// assigns it — still validates exactly the same season.
+    /// </summary>
     float RunSpeed(Level lv, Actor a) =>
-        Phys.MaxSpeed * Phys.BotBaseFactor * (float)P.Pace * (float)Modes.SpeedMultiplierFor(a, lv);
+        Phys.MaxSpeed * Phys.BotBaseFactor * (float)P.Pace * (float)Modes.SpeedMultiplierFor(a, lv) * Phys.BotPaceMult;
 
     /// <summary>Shared steering integration: approach wish velocity, then collide+carry.</summary>
     void IntegrateWish(Actor a, Level lv, Vector2 wish, float dt)
@@ -178,7 +183,7 @@ public sealed class BotController
             var to = new Vector2(lv.SafeZoneCenter.X - a.Pos.X, lv.SafeZoneCenter.Z - a.Pos.Z);
             var szWish = to.LengthSquared() < 0.3f
                 ? Vector2.Zero
-                : to / to.Length() * (float)(Phys.MaxSpeed * Phys.BotBaseFactor * P.Pace * Modes.SpeedMultiplierFor(a, lv));
+                : to / to.Length() * (float)(Phys.MaxSpeed * Phys.BotBaseFactor * P.Pace * Modes.SpeedMultiplierFor(a, lv) * Phys.BotPaceMult);
             IntegrateWish(a, lv, szWish, dt);
             return;
         }
