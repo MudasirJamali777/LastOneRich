@@ -92,6 +92,7 @@ public sealed class LorGame : Game
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
         _states.Update(dt);
+        Achievements.UpdateToasts(dt);   // Priority 5: unlock toasts tick in every state
 
         // Safe point for resolution / fullscreen: after the state's Update, long before BeginDraw,
         // so resetting the device can never land between a begin/end pair.
@@ -118,6 +119,7 @@ public sealed class LorGame : Game
 
         _states.Draw();
         if (GameServices.DebugOverlay) DrawDebugOverlay();
+        DrawAchievementToasts();   // Priority 5: ride above whatever the state drew
         base.Draw(gameTime);
 
         // A frame survived a present, so the saved display mode is good: disarm the boot probe
@@ -139,6 +141,24 @@ public sealed class LorGame : Game
             catch { /* screenshot is best-effort */ }
             Exit();
         }
+    }
+
+    /// <summary>Achievement unlock toasts — one extra UI pass, drawn above every state.</summary>
+    void DrawAchievementToasts()
+    {
+        if (!Achievements.HasToasts) return;
+        var vp = GraphicsDevice.Viewport;
+        Ui.Begin(vp);
+        Achievements.DrawToasts(GameServices.Font, GameServices.Sb);
+        Ui.End();
+    }
+
+    /// <summary>Best-effort career flush on exit. Store is atomic, so quitting mid-frame
+    /// can never tear save.json (Priority 4).</summary>
+    protected override void OnExiting(object sender, System.EventArgs args)
+    {
+        if (GameServices.Save != null) SaveSystem.Store(GameServices.Save);
+        base.OnExiting(sender, args);
     }
 
     /// <summary>F3 overlay: FPS + move-vector indicators (acceptance: A/D/W/S must match these).</summary>

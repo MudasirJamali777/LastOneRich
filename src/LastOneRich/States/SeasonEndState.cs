@@ -51,6 +51,7 @@ public sealed class SeasonEndState : IGameState
                 _lines.Add(("MAX VOLT: \"AND NEEEEW CHAMPION OF THE VOLT DOME!\"", new Color(255, 235, 150)));
                 save.Championships++;
                 if (_rank > 0 && _rank < save.BestFinish) save.BestFinish = 1;
+                Achievements.Unlock("champion");   // Priority 5
                 _fx.ConfettiBurst(new Vector2(640, 200), 220, 1200, 80);
                 GameServices.Audio.Event("stinger_win");
                 GameServices.Audio.Event("cheer");
@@ -85,9 +86,10 @@ public sealed class SeasonEndState : IGameState
                 break;
         }
 
-        // save.json (GDD 17)
+        // save.json (GDD 17) — atomic write, versioned schema (Priority 4)
         save.TotalBanked += gained;
         save.SeasonsPlayed++;
+        if (gained > save.BestBank) save.BestBank = gained;   // Priority 4 stat
         SaveSystem.Store(save);
     }
 

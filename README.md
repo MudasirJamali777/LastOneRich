@@ -92,6 +92,23 @@ difficulty-on-next-round) except **resolution / fullscreen**, which queue behind
 `APPLY & RESTART` prompt because flipping the swapchain under a live player is never a surprise
 you want. Hand-editable extras: `cameraHeight`, `pitchMinDeg`, `pitchMaxDeg`.
 
+### Career save (Priority 4)
+
+`saves/save.json` is now **versioned** (schema v2: round/podium/win stats, best bank, achievement
+list) with forward **migration** from v1 files, written **atomically** (temp file + rename, with
+the previous good write kept as `save.json.bak` and used as automatic fallback). A crash or a
+hand-edit can never tear the career file; quitting flushes best-effort via `LorGame.OnExiting`.
+
+### Achievements (Priority 5)
+
+Ten Season-1 achievements (`Core/Achievements.cs`), evaluated once per round at the results
+ceremony and at the season choke points (bank/risk decision, cash-out, champion) — never polled
+per frame. Unlocks persist into `save.json` immediately, sting the crowd, and ride a golden
+toast above whatever state is on screen. The main menu gained an **ACHIEVEMENTS** trophy case
+(earned = gold, locked = `???`). One anchor is deliberately provisional: `glass_perfect`
+currently means "finish Round 6", and a `PRIORITY 6 NOTE` in `Achievements.EvaluateRound`
+marks exactly where it re-anchors to `TilesBroken == 0` once Round 6's glass tiles can break.
+
 ---
 
 ## 2) Controls (GDD §4)
@@ -266,7 +283,7 @@ last-one-rich/
 | §13 data-driven content | `World/DTOs.cs`, `Core/Json.cs`, `content/data/**` |
 | §14 AI-created content guardrails | `Season/TwistValidator.cs` + HeadlessSim |
 | §15 audio | `Core/AudioBank.cs`, `content/sfx/*` (EDM loop, stingers, crowd) |
-| §17 save/progression | `Core/SaveSystem.cs` → `%APPDATA%/LastOneRich/save.json` |
+| §17 save/progression | `Core/SaveSystem.cs` → `saves/save.json` — versioned, atomic, `.bak` fallback (Priority 4); achievements in `Core/Achievements.cs` (Priority 5) |
 | §18 architecture | `Core/StateMachine.cs`, `Core/LorGame.cs` (update order) |
 
 ---

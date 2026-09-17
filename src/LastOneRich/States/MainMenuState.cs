@@ -7,13 +7,14 @@ namespace LastOneRich.States;
 
 public sealed class MainMenuState : IGameState
 {
-    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "SETTINGS", "QUIT" };
+    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "ACHIEVEMENTS", "SETTINGS", "QUIT" };
 
     readonly StateMachine _sm;
     Level _level;
     ArenaBackdrop _bg;
     int _sel;
     bool _howTo;
+    bool _achievements;   // Priority 5: trophy case page
     bool _settingsOpen;
     readonly SettingsScreen _settings = new();
     float _t;
@@ -40,6 +41,12 @@ public sealed class MainMenuState : IGameState
             return;
         }
 
+        if (_achievements)
+        {
+            if (Input.ConfirmPressed || Input.BackPressed) { _achievements = false; GameServices.Audio.Event("blip"); }
+            return;
+        }
+
         // Settings overlay: the screen owns its own navigation, and backs out with ESC / B.
         if (_settingsOpen)
         {
@@ -47,7 +54,7 @@ public sealed class MainMenuState : IGameState
             {
                 _settings.Close();        // flushes edits to saves/settings.json
                 _settingsOpen = false;
-                _sel = 2;                 // land back on SETTINGS
+                _sel = 3;                 // land back on SETTINGS
                 GameServices.Audio.Event("blip");
             }
             return;                       // the menu list itself is inert while settings is up
@@ -72,10 +79,13 @@ public sealed class MainMenuState : IGameState
                     _howTo = true;
                     break;
                 case 2:
+                    _achievements = true;
+                    break;
+                case 3:
                     _settings.Open();
                     _settingsOpen = true;
                     break;
-                case 3:
+                case 4:
                     _sm.Quit();
                     break;
             }
@@ -103,7 +113,7 @@ public sealed class MainMenuState : IGameState
         f.Draw(sb, sub, new Vector2(640, 140), new Color(200, 210, 255), 0.62f, 0f, new Vector2(ss.X / 2, 0), true);
 
         // menu items
-        bool overlay = _howTo || _settingsOpen;
+        bool overlay = _howTo || _achievements || _settingsOpen;
         for (int i = 0; i < Items.Length; i++)
         {
             bool selected = i == _sel && !overlay;
@@ -119,13 +129,15 @@ public sealed class MainMenuState : IGameState
                 f.Draw(sb, ">", new Vector2(640 - size.X / 2 - 26, pos.Y), new Color(255, 210, 63), 1.05f, 0f, new Vector2(f.Measure(">", 1.05f).X, 0));
         }
 
-        // career footer
+        // career footer (Priority 4 stats + Priority 5 trophy count)
         var save = GameServices.Save;
-        string career = $"CAREER  BANKED {Ui.Money(save.TotalBanked)}   SEASONS {save.SeasonsPlayed}   WINS {save.Championships}";
+        string career = $"CAREER  BANKED {Ui.Money(save.TotalBanked)}   SEASONS {save.SeasonsPlayed}   WINS {save.Championships}   " +
+                        $"TROPHIES {Achievements.UnlockedCount()}/{Achievements.All.Length}";
         var cs = f.Measure(career, 0.55f);
         f.Draw(sb, career, new Vector2(640, 668), new Color(150, 160, 190), 0.55f, 0f, new Vector2(cs.X / 2, 0), true);
 
         if (_howTo) DrawHowTo(f);
+        if (_achievements) DrawAchievements(f);
         if (_settingsOpen) _settings.Draw(f, sb);
 
         Ui.End();
@@ -165,5 +177,44 @@ public sealed class MainMenuState : IGameState
             y += 30;
         }
         f.Draw(GameServices.Sb, "ENTER / A: BACK", new Vector2(640, 596), new Color(150, 160, 190), 0.55f, 0f, new Vector2(f.Measure("ENTER / A: BACK", 0.55f).X / 2, 0));
+    }
+
+    /// <summary>Priority 5: trophy case — every achievement, earned (gold) or locked (grey).</summary>
+    void DrawAchievements(BitmapFont f)
+    {
+        var sb = GameServices.Sb;
+        Ui.Rect(new Vector2(0, 0), new Vector2(1280, 720), new Color(5, 5, 12, 215));
+        var panel = new Rectangle(240, 60, 800, 600);
+        Ui.Rect(panel, new Color(18, 20, 36, 245));
+        Ui.Frame(panel, 3, new Color(255, 210, 63));
+
+        int earned = Achievements.UnlockedCount();
+        string title = $"ACHIEVEMENTS — {earned}/{Achievements.All.Length}";
+        f.Draw(sb, title, new Vector2(640, panel.Y + 22), new Color(255, 210, 63), 1.1f, 0f,
+            new Vector2(f.Measure(title, 1.1f).X / 2, 0));
+
+        float y = panel.Y + 92;
+        var gold = new Color(255, 210, 63);
+        foreach (var a in Achievements.All)
+        {
+            bool got = Achievements.Has(a.Id);
+            var nameCol = got ? gold : new Color(110, 116, 140);
+            var descCol = got ? new Color(200, 208, 235) : new Color(90, 96, 120);
+            string name = got ? a.Name : "???";
+
+            if (got) Ui.Rect(new Vector2(panel.X + 24, y - 6), new Vector2(8, 46), gold);
+            f.DrawOutlined(sb, name, new Vector2(panel.X + 46, y), nameCol, 0.68f);
+            f.Draw(sb, a.Desc, new Vector2(panel.X + 46, y + 30), descCol, 0.46f, 0f, Vector2.Zero, true);
+            if (got)
+            {
+                string tag = "EARNED";
+                f.Draw(sb, tag, new Vector2(panel.Right - 40 - f.Measure(tag, 0.5f).X, y + 8), gold, 0.5f);
+            }
+            y += 52;
+        }
+
+        string hint = "ENTER / A OR ESC: BACK";
+        f.Draw(sb, hint, new Vector2(640, panel.Bottom - 48), new Color(150, 160, 190), 0.55f, 0f,
+            new Vector2(f.Measure(hint, 0.55f).X / 2, 0));
     }
 }
