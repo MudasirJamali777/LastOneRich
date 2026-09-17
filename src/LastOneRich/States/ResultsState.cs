@@ -49,6 +49,9 @@ public sealed class ResultsState : IGameState
     {
         _bg = new ArenaBackdrop(_season.CurrentLevel);
 
+        // Priority 5: captured BEFORE Wallet.ApplyPending below — "risked the pot and lived".
+        bool hadPendingRisk = _season.Wallet.PendingMult > 1;
+
         var elimSet = Elimination.Resolve(_season.Tracker, _season.CurrentLevel, _ranking);
         // upgrades: golden ticket revives the player once; extra life survives one cut
         if (elimSet.Any(a => a.IsPlayer))
@@ -109,6 +112,18 @@ public sealed class ResultsState : IGameState
             if (_season.Wallet.PendingMult > 1)
                 _payoutLines.Add($"PENDING POT ×{_season.Wallet.PendingMult:0.#} .......... RISKED!");
         }
+
+        // Priority 4: richer career stats, updated once per results ceremony.
+        var save = GameServices.Save;
+        save.RoundsPlayed++;
+        if (!_playerEliminated)
+        {
+            if (_playerRank <= 3) save.Podiums++;
+            if (_playerRank == 1) save.RoundsWon++;
+        }
+
+        // Priority 5: evaluate this round's achievements exactly once, here at the choke point.
+        Achievements.EvaluateRound(_season, _ranking, _playerRank, _playerEliminated, hadPendingRisk);
 
         _screen.FadeAlpha = 1f;
         _screen.FadeTo(0f, 1.6f);

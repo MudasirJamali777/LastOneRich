@@ -37,6 +37,7 @@ public sealed class CashOutOfferState : IGameState
             if (_sel == 0)
             {
                 GameServices.Audio.Event("cash");
+                Achievements.Unlock("cash_out");   // Priority 5
                 _sm.Replace(new SeasonEndState(_sm, _season, SeasonEndState.Outcome.CashedOut, _offer));
             }
             else

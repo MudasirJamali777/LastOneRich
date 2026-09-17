@@ -52,6 +52,7 @@ public sealed class BankRiskState : IGameState
             {
                 wallet.ChooseBank();
                 GameServices.Audio.Event("cash");
+                Achievements.Unlock("first_bank");   // Priority 5
                 Advance();
             }
             else

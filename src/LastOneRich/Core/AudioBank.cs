@@ -114,6 +114,8 @@ public sealed class AudioBank
             case "hammer_hit": Play("hammer_hit", 0.8f); break;
             case "splash": Play("splash", 0.5f); break;
             case "blip": Play("blip", 0.5f); break;
+            // Priority 5: golden toast sting for achievement unlocks.
+            case "achievement": Play("cheer", 0.55f, 0.15f); Play("cash", 0.5f, 0.1f); break;
             default: Play(name); break;
         }
     }
