@@ -116,6 +116,12 @@ public sealed class AudioBank
             case "blip": Play("blip", 0.5f); break;
             // Priority 5: golden toast sting for achievement unlocks.
             case "achievement": Play("cheer", 0.55f, 0.15f); Play("cash", 0.5f, 0.1f); break;
+            // Priority 6: glass path. Pitch-jittered so a row of panes going at once reads as
+            // several separate panes rather than one flanged mono hit.
+            case "glass_crack": Play("glass_crack", 0.55f, Rng.Range(-0.12f, 0.12f)); break;
+            case "glass_break": Play("glass_break", 0.75f, Rng.Range(-0.18f, 0.18f)); break;
+            case "glass_land": Play("glass_land", 0.34f, Rng.Range(-0.10f, 0.10f)); break;
+            case "glass_reform": Play("glass_reform", 0.45f, Rng.Range(-0.08f, 0.08f)); break;
             default: Play(name); break;
         }
     }

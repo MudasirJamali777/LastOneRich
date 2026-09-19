@@ -123,13 +123,13 @@ public static class Achievements
                 break;
         }
 
-        if (string.Equals(levelId, "level06", StringComparison.OrdinalIgnoreCase) && player.Finished)
+        if (string.Equals(levelId, "level06", StringComparison.OrdinalIgnoreCase)
+            && player.Finished && player.TilesBroken == 0)
         {
-            // PRIORITY 6 NOTE: the tiles of GLASS PATH MEMORY do not break yet — the BreakTile
-            // hazard, the per-actor TilesBroken counter and the shatter/reform loop all land
-            // with Priority 6. Until then this achievement anchors on "finished the race".
-            // Priority 6 must re-anchor it to ALSO require `player.TilesBroken == 0`
-            // (the counter lives on Actor; BreakTile increments it at shatter time).
+            // Priority 6 re-anchor (was: "finished the race", a placeholder while the panes were
+            // still scenery). Now that BreakTile shatters and Actor.TilesBroken counts the panes
+            // an actor personally dropped, FLAWLESS GLASS means what its description always said:
+            // cross GLASS PATH MEMORY without breaking one tile.
             Unlock("glass_perfect");
         }
     }

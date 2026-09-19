@@ -118,6 +118,23 @@
    "maxMult": {
     "timer.limit": 0.75
    }
+  },
+  {
+   "id": "glass_plus",
+   "name": "BRITTLE GLASS",
+   "desc": "Fake panes give way 30% faster — no time to think!",
+   "minRound": 3,
+   "conflictsWith": [],
+   "effects": [
+    {
+     "target": "glass",
+     "param": "crackTime",
+     "mult": 0.7
+    }
+   ],
+   "maxMult": {
+    "glass.crackTime": 0.6
+   }
   }
  ]
 }
