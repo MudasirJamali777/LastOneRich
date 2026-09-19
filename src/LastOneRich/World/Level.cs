@@ -26,6 +26,14 @@ public sealed class Level
     public List<WindZone> Winds = new();
     public List<DroneScanner> Drones = new();
     public List<IceZone> Ices = new();
+    public List<BreakTile> Tiles = new();
+
+    /// <summary>
+    /// Priority 6: fired when a pane shatters (center, size, tint) so the presentation layer can
+    /// throw shards without the World layer ever touching the renderer. GameplayState subscribes;
+    /// HeadlessSim leaves it null and runs the identical simulation silently.
+    /// </summary>
+    public Action<Vector3, Vector3, Color> ShatterFx;
     public double SlimeSpeedMult = 1, SlimeJumpMult = 1;
     public Vector3 SafeZoneCenter, SafeZoneHalf;
     public Vector3 VaultPos, VaultHalf, DepositPos, DepositHalf;
@@ -107,6 +115,9 @@ public sealed class Level
         foreach (var h in dto.Hammers) { var z = new RotatorHammer(h); z.ApplyTwist(Mult("hammer", "speed", 1f)); Hammers.Add(z); }
         foreach (var d in dto.Drones) { var z = new DroneScanner(d); z.ApplyTwist(Mult("drone", "speed", 1f)); Drones.Add(z); }
         foreach (var i in dto.IceZones) { var z = new IceZone(i); z.ApplyTwist(Mult("ice", "friction", 1f)); Ices.Add(z); }
+
+        // --- breakable glass panes (Priority 6) ---
+        BuildBreakTiles(dto, Mult("glass", "crackTime", 1f));
 
         // --- moving platforms + their dynamic colliders ---
         foreach (var m in dto.Movers)
@@ -194,6 +205,139 @@ public sealed class Level
         }
 
         BakeStaticGeometry();
+    }
+
+    // ---------- Priority 6: breakable glass path ----------
+
+    /// <summary>
+    /// Build the glass panes and decide which one of each row is safe.
+    ///
+    /// The shuffle is seeded from <c>glassSeed</c> (level JSON) and NOT from the shared
+    /// <see cref="Rng"/>, on purpose: the pattern must be identical in the game, in HeadlessSim
+    /// and across a mid-round restart, and must not consume draws from the gameplay RNG stream
+    /// (which would shift every bot stumble downstream of it). Hand-authored <c>safe</c> values
+    /// always win; the shuffle only fills in the rows that left it null.
+    ///
+    /// Every row is guaranteed at least one safe pane — a row of pure fakes would be an
+    /// unwinnable course, so the invariant is enforced here rather than trusted to the data.
+    /// </summary>
+    void BuildBreakTiles(LevelDTO dto, float crackMult)
+    {
+        if (dto.BreakTiles == null || dto.BreakTiles.Count == 0) return;
+
+        // group pane indices by row
+        var rows = new Dictionary<int, List<int>>();
+        for (int i = 0; i < dto.BreakTiles.Count; i++)
+        {
+            int row = dto.BreakTiles[i].Row;
+            if (!rows.TryGetValue(row, out var list)) rows[row] = list = new List<int>();
+            list.Add(i);
+        }
+
+        var safe = new bool[dto.BreakTiles.Count];
+        var rng = new Random(dto.GlassSeed);
+
+        foreach (var kv in rows.OrderBy(k => k.Key))
+        {
+            var idx = kv.Value;
+            bool anyAuthored = idx.Any(i => dto.BreakTiles[i].Safe.HasValue);
+
+            if (anyAuthored)
+            {
+                foreach (int i in idx) safe[i] = dto.BreakTiles[i].Safe ?? false;
+                // invariant: never ship a row nobody can cross
+                if (!idx.Any(i => safe[i])) safe[idx[0]] = true;
+            }
+            else
+            {
+                safe[idx[rng.Next(idx.Count)]] = true;
+            }
+        }
+
+        for (int i = 0; i < dto.BreakTiles.Count; i++)
+        {
+            var t = new BreakTile(dto.BreakTiles[i], safe[i], dto.BreakTiles[i].Row);
+            t.ApplyTwist(crackMult);
+            t.Attach(World);
+            Tiles.Add(t);
+        }
+    }
+
+    /// <summary>Index of the pane supporting this actor, or -1. Linear scan: courses hold ~50 panes.</summary>
+    public int TileAt(Actor a)
+    {
+        for (int i = 0; i < Tiles.Count; i++)
+            if (Tiles[i].IsSolid && Tiles[i].Supports(a)) return i;
+        return -1;
+    }
+
+    /// <summary>
+    /// Bot oracle: is the pane under/ahead of this position a safe one? Bots consult this through
+    /// their PuzzleSkill so smart rivals "remember" the route and dim ones guess — the knowledge
+    /// gate lives in <see cref="BotController"/>, not here.
+    /// </summary>
+    public bool TileSafeAt(Vector3 p, float lookAheadZ)
+    {
+        for (int i = 0; i < Tiles.Count; i++)
+        {
+            var t = Tiles[i];
+            if (!t.IsSolid) continue;
+            if (System.MathF.Abs(p.X - t.Pos.X) > t.Size.X * 0.5f) continue;
+            float dz = t.Pos.Z - p.Z;
+            if (dz < -t.Size.Z * 0.5f || dz > lookAheadZ) continue;
+            return t.Safe;
+        }
+        return true;   // nothing ahead to judge — don't stall the bot
+    }
+
+    /// <summary>
+    /// Tick every pane and apply weight. Runs inside <see cref="Update"/> BEFORE the fall-out check,
+    /// so a pane that shatters this frame drops its rider on this very frame rather than the next.
+    /// </summary>
+    void UpdateBreakTiles(float dt, List<Actor> actors)
+    {
+        if (Tiles.Count == 0) return;
+
+        // 1) weight: who is standing on what
+        for (int i = 0; i < actors.Count; i++)
+        {
+            var a = actors[i];
+            a.TileIdx = -1;
+            if (a.RoundOut) continue;
+            if (!a.OnGround) continue;
+
+            for (int t = 0; t < Tiles.Count; t++)
+            {
+                var tile = Tiles[t];
+                if (!tile.IsSolid || !tile.Supports(a)) continue;
+                a.TileIdx = t;
+                bool firstTouch = !tile.Touched;
+                bool wasSolid = tile.State == BreakTile.TileState.Solid;
+                tile.Press(a);
+                // One cue per pane, not per frame: a creak when a fake pane starts to go, a clean
+                // ring when a safe pane takes the weight. Only the PLAYER's own steps ring, or a
+                // pack of bots crossing behind you would drown the level in chimes.
+                if (wasSolid && !tile.Safe) Sfx?.Invoke("glass_crack");
+                else if (firstTouch && tile.Safe && a.IsPlayer) Sfx?.Invoke("glass_land");
+                break;
+            }
+        }
+
+        // 2) advance each pane's clock; attribute the break to whoever was standing on it
+        for (int t = 0; t < Tiles.Count; t++)
+        {
+            var tile = Tiles[t];
+            bool shattered = tile.Update(dt);
+
+            if (tile.JustReformed) Sfx?.Invoke("glass_reform");
+            if (!shattered) continue;
+
+            for (int i = 0; i < actors.Count; i++)
+                if (actors[i].TileIdx == t) actors[i].TilesBroken++;
+
+            Sfx?.Invoke("glass_break");
+            ShatterFx?.Invoke(tile.Pos, tile.Size, tile.Tint);
+        }
     }
 
     // ---------- static bake (graphics pass): geometry, crowd, floor grid, edge curbs, hazard decals ----------
@@ -335,6 +479,10 @@ public sealed class Level
         foreach (var h in Hammers) h.Update(dt, actors, this);
         foreach (var d in Drones) d.Update(this);
 
+        // Priority 6: panes take weight and shatter BEFORE the fall-out sweep below, so an actor
+        // whose pane just vanished starts falling on this frame instead of hovering for one tick.
+        UpdateBreakTiles(dt, actors);
+
         // shrinking safe zone (SurvivalZone)
         var sz = Dto.SafeZone;
         if (sz != null && sz.ShrinkTo > 0)
@@ -415,6 +563,7 @@ public sealed class Level
         foreach (var m in Movers) r.Box(m.Pos, m.Size, m.Tint);
         foreach (var d in Drones) d.Draw(r, Time);
         foreach (var iz in Ices) iz.Draw(r, Time);
+        foreach (var t in Tiles) t.Draw(r, Time);
 
         // mode set dressing
         if (Dto.SafeZone != null)

@@ -119,6 +119,25 @@ public sealed class LevelDTO
     public int CarryCap { get; set; } = 3;
     public ButtonDTO Button { get; set; }
     public float[] SpawnGrid { get; set; } // [x,y,z, dx,dz, cols] — fills up to contestant count
+    // --- Priority 6: breakable glass path ---
+    public List<BreakTileDTO> BreakTiles { get; set; } = new();
+    public int GlassSeed { get; set; } = 6061;   // seeds the safe-pane shuffle (per level, fixed)
+}
+
+/// <summary>
+/// One breakable glass pane (Priority 6). <c>Safe</c> is deliberately a NULLABLE tri-state:
+/// null = "let the seeded shuffle decide", true/false = authored by hand. That keeps hand-placed
+/// puzzle rows possible without forcing every pane in a 22-row course to be spelled out.
+/// </summary>
+public sealed class BreakTileDTO
+{
+    public float[] Pos { get; set; } = new float[3];
+    public float[] Size { get; set; } = new float[] { 3.2f, 0.5f, 3.6f };
+    public int Row { get; set; }                  // panes sharing a row form one choice
+    public bool? Safe { get; set; }               // null = seeded shuffle picks the safe pane
+    public double CrackTime { get; set; } = 0.45; // grace before a fake pane drops
+    public double ReformTime { get; set; }        // 0 = stays broken for the round
+    public string Color { get; set; } = "#8FE6FF";
 }
 
 public sealed class SafeZoneDTO

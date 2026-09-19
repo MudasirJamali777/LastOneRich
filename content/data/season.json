@@ -52,7 +52,8 @@
    "baseReward": 30000,
    "twistPool": [
     "wind_plus",
-    "timer_plus"
+    "timer_plus",
+    "glass_plus"
    ],
    "cashOutAfter": true
   },

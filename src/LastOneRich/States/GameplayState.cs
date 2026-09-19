@@ -24,6 +24,7 @@ public sealed class GameplayState : IGameState
 
     readonly Camera3D _cam = new();
     readonly Particles _fx = new();
+    readonly WorldParticles _worldFx = new();   // Priority 6: 3D debris (glass shards, dust)
     readonly ScreenFX _screen = new();
 
     Phase _phase = Phase.Countdown;
@@ -156,6 +157,16 @@ public sealed class GameplayState : IGameState
         Phys.HazardMult = Keybinds.DifficultyHazardMult;
         foreach (var d in _lv.Drones) d.Speed *= Phys.HazardMult;   // drone patrols (StrikesOut)
 
+        // Priority 6: the World layer raises a shatter event, the presentation layer answers with
+        // shards. Keeping the arrow pointing this way is what lets HeadlessSim run the same
+        // simulation with no renderer attached.
+        _lv.ShatterFx = (center, size, tint) =>
+        {
+            _worldFx.GlassShatter(center, size, tint);
+            var p = _actors.Count > 0 ? _actors[0] : null;
+            if (p != null && Vector3.DistanceSquared(p.Pos, center) < 12f * 12f) _screen.Flash(0.12f);
+        };
+
         _tracker = new RaceTracker(_actors, _lv);
         _season.Tracker = _tracker;
         if (_season.Upgrades.Contains("shield"))
@@ -215,6 +226,7 @@ public sealed class GameplayState : IGameState
 
         _screen.Update(dt);
         _fx.Update(dt);
+        _worldFx.Update(dt);   // Priority 6: 3D debris ticks with everything else (pause freezes it)
         _phaseT += dt;
 
         SyncMouseCapture();
@@ -376,6 +388,8 @@ public sealed class GameplayState : IGameState
         _lv.Draw(r);
         float alpha = LorGame.InterpAlpha;
         foreach (var a in _actors) ActorRenderer.Draw(r, a, alpha);
+        _worldFx.Draw(r);   // Priority 6: shards are world-space geometry, so they batch and
+                            // depth-sort with the level instead of floating over it like the HUD
         r.EndFrame();
 
         var f = GameServices.Font;
@@ -520,6 +534,25 @@ public sealed class GameplayState : IGameState
             Ui.Rect(new Vector2(hx, hy), new Vector2(280, 34), new Color(8, 8, 18, 190));
             f.Draw(sb, $"{st}  {pl.Score:0}s", new Vector2(hx + 10, hy + 6), col, 0.6f);
         }
+        // Priority 6: glass tracker — rows cleared and whether the flawless run is still alive.
+        // Shown on any level that has panes, so future glass courses inherit it for free.
+        if (_lv.Tiles.Count > 0)
+        {
+            int rows = 0;
+            foreach (var t in _lv.Tiles) if (t.Row + 1 > rows) rows = t.Row + 1;
+            int crossed = 0;
+            foreach (var t in _lv.Tiles)
+                if (t.Pos.Z < pl.Pos.Z && t.Row + 1 > crossed) crossed = t.Row + 1;
+
+            bool flawless = pl.TilesBroken == 0;
+            var col = flawless ? new Color(141, 255, 63) : new Color(255, 150, 90);
+            Ui.Rect(new Vector2(hx, hy), new Vector2(320, 34), new Color(8, 8, 18, 190));
+            string line = flawless
+                ? $"GLASS {crossed}/{rows}  ·  FLAWLESS"
+                : $"GLASS {crossed}/{rows}  ·  BROKEN {pl.TilesBroken}";
+            f.Draw(sb, line, new Vector2(hx + 10, hy + 6), col, 0.6f);
+        }
+
         if (_lv.Dto.Type == "FinaleButton")
         {
             Ui.Rect(new Vector2(hx, hy), new Vector2(260, 40), new Color(8, 8, 18, 190));
@@ -564,6 +597,8 @@ public sealed class GameplayState : IGameState
         "StrikesOut" => "DODGE THE DRONES  ·  3 STRIKES AND YOU'RE OUT",
         "ScoreCollect" => "GRAB AT THE ORANGE VAULT  ·  DEPOSIT AT THE GREEN PAD",
         "FinaleButton" => "HOLD THE BUTTON TO DRAIN RIVALS  ·  WAITING BUILDS YOUR RATE",
+        // Priority 6: a glass course is still a Race, but the read is "pick panes", not "sprint"
+        _ when _lv.Tiles.Count > 0 => "ONE PANE IN EACH ROW HOLDS  ·  WATCH WHO FALLS, THEN FOLLOW",
         _ => $"REACH THE FINISH  ·  BOTTOM {_lv.Dto.Elimination.Percent:0}% ELIMINATED",
     };
 

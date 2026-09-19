@@ -102,6 +102,74 @@ write_wav("hammer_hit.wav", mix(kick(0.28, 130, 50, 0.85), tone(800, 0.16, "squa
 write_wav("splash.wav", noise(0.42, 0.5, 0.6, lp=0.35))
 write_wav("cheer.wav", noise(2.2, 0.4, 0.75, 0.3, lp=0.12))
 
+# --- Priority 6: breakable glass path -------------------------------------
+# Four cues that must stay distinguishable while several panes go at once:
+#   glass_crack  short dry tick  — "this pane is about to go, MOVE"
+#   glass_break  bright burst + shard tail — the pane actually dropping
+#   glass_land   soft ring       — weight landing on a pane that HELD (the relief beat)
+#   glass_reform crystalline rise — a pane fading back in
+# Built from the same primitives as everything else so the set stays sonically of a piece.
+#
+# The whole block runs on a SAVED-AND-RESTORED RNG state with its own seed. Every noise-based
+# generator here draws from the module-level `random`, so simply appending these calls would
+# advance the shared stream and silently re-roll the noise in music_loop.wav (verified: it did).
+# Bracketing the block keeps every pre-existing clip byte-identical no matter what is added here.
+_rng_state = random.getstate()
+random.seed(60601)
+
+def normalize(smp, ceiling=0.92):
+    """Scale a signal so its loudest sample sits exactly at `ceiling` (same trick the music
+    loop uses at the bottom of this file). Peaks are transient-dependent here, so trusting
+    hand-tuned scalars is what let a single sample clip; this makes headroom exact."""
+    peak = max(abs(s) for s in smp) or 1.0
+    return [s / peak * ceiling for s in smp]
+
+
+def shards(dur=0.7, vol=0.5, density=34):
+    """Sparse high partials decaying at different rates — the tinkle after a pane lets go."""
+    n = int(SR * dur)
+    out = [0.0] * n
+    for _ in range(density):
+        f = random.uniform(1400, 5200)
+        start = int(random.uniform(0, 0.42) * SR)
+        length = int(random.uniform(0.05, 0.3) * SR)
+        ph = 0.0
+        amp = vol * random.uniform(0.25, 1.0)
+        for i in range(length):
+            j = start + i
+            if j >= n:
+                break
+            ph += 2 * math.pi * f / SR
+            out[j] += math.sin(ph) * amp * math.exp(-7.5 * i / length)
+    return out
+
+# NOTE ON LEVELS: noise() carries an internal 8x gain, so its `vol` argument is far hotter than
+# tone()'s. These were measured after generation and trimmed to sit under 0 dBFS — glass_crack
+# fires on every pane a contestant touches, and a hard-clipped tick turns into an audible crunch
+# when a whole row cracks at once. Peaks now land ~80-90% FS with zero clipped samples.
+write_wav("glass_crack.wav", normalize(mix(
+    noise(0.11, 0.055, 0.75, 0.001, lp=0.85),
+    tone(2600, 0.06, "square", 0.10, 0.001, 0.05),
+    tone(1730, 0.09, "sine", 0.08, 0.001, 0.07)), 0.62))
+
+write_wav("glass_break.wav", normalize(mix(
+    noise(0.30, 0.055, 0.7, 0.001, lp=0.7),
+    shards(0.75, 0.27),
+    cat(tone(1900, 0.05, "square", 0.16, 0.001, 0.04),
+        tone(950, 0.20, "sine", 0.12, 0.001, 0.18))), 0.92))
+
+write_wav("glass_land.wav", normalize(mix(
+    tone(1320, 0.20, "sine", 0.20, 0.002, 0.18),
+    tone(1980, 0.14, "sine", 0.09, 0.002, 0.12),
+    noise(0.06, 0.10, 0.8, 0.001, lp=0.6)), 0.70))
+
+write_wav("glass_reform.wav", normalize(mix(
+    tone(660, 0.45, "sine", 0.17, 0.02, 0.35, slide=1.1),
+    tone(990, 0.45, "sine", 0.10, 0.03, 0.35, slide=1.1),
+    cat(silence(0.18), shards(0.34, 0.16, 12))), 0.55))
+
+random.setstate(_rng_state)   # hand the shared stream back untouched (see note above)
+
 # --- music loop: 124 BPM "show theme", 4 bars (~7.74s) ----------------------
 BPM = 124.0
 BEAT = 60.0 / BPM

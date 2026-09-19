@@ -105,9 +105,37 @@ Ten Season-1 achievements (`Core/Achievements.cs`), evaluated once per round at 
 ceremony and at the season choke points (bank/risk decision, cash-out, champion) — never polled
 per frame. Unlocks persist into `save.json` immediately, sting the crowd, and ride a golden
 toast above whatever state is on screen. The main menu gained an **ACHIEVEMENTS** trophy case
-(earned = gold, locked = `???`). One anchor is deliberately provisional: `glass_perfect`
-currently means "finish Round 6", and a `PRIORITY 6 NOTE` in `Achievements.EvaluateRound`
-marks exactly where it re-anchors to `TilesBroken == 0` once Round 6's glass tiles can break.
+(earned = gold, locked = `???`). One anchor was deliberately provisional: `glass_perfect`
+meant "finish Round 6", with a `PRIORITY 6 NOTE` in `Achievements.EvaluateRound` marking
+where it re-anchors to `TilesBroken == 0`. Priority 6 closes that note.
+
+### Breakable glass (Priority 6)
+
+Round 6 **GLASS PATH MEMORY** is now a real puzzle instead of scenery. `World/BreakTiles.cs`
+adds `BreakTile`, following the existing `Hazards.cs` pattern and cycling
+`Solid → Cracking → Shattered → Reforming`. A pane owns its collider and detaches it on
+shatter, so the hole is physically real. `Actor.TilesBroken` counts the panes that go down
+under you, and `glass_perfect` now requires `Finished && TilesBroken == 0`.
+
+Each row has exactly one safe pane (invariant enforced in `Level.BuildBreakTiles`, seeded by
+`glassSeed` so a round is reproducible). Panes reform after `reformTime`, which matters more
+than it sounds: with reform disabled, the opening stampede permanently destroyed the fake panes
+in row 0 and the course became unfinishable for everyone who respawned behind it.
+
+Bots read the glass through `BotController.UpdateGlassBrain`, gated on `PuzzleSkill`. They may
+guess wrong, fall, respawn and try again exactly like the player, and a pane someone has already
+proved safe becomes public knowledge the rest of the field will follow. Hesitation is modelled as
+a ground-only "remembering" beat — a contestant cannot recall the pattern mid-air — so low skill
+means lingering on glass, and lingering is what drops you through it.
+
+New world-space particles (`Core/WorldParticles.cs`, a 512-slot allocation-free pool) throw shards
+on shatter, and four generated cues (`glass_crack`, `glass_break`, `glass_land`, `glass_reform`)
+ship via `tools/make_audio.py`. The HUD gains a glass panel reading `GLASS n/12 · FLAWLESS` until
+your first break.
+
+Tuning was driven by a headless simulation of the round rather than by eye. Across 12 seeds the
+course yields 5-6 finishers out of 7, a flawless run is available in 12/12 seeds, and panes broken
+correlates with `PuzzleSkill` at **r = −0.84**.
 
 ---
 

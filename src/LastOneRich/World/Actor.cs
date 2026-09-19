@@ -45,4 +45,11 @@ public sealed class Actor
     public int Carrying;           // heist bricks
     public float CarryCd;
     public bool InIce;
+
+    // --- Priority 6: breakable glass path ---
+    /// <summary>Panes this actor personally shattered (glass_perfect wants this at 0).</summary>
+    public int TilesBroken;
+
+    /// <summary>Index of the pane currently underfoot, -1 when none (bot memory + HUD tell).</summary>
+    public int TileIdx = -1;
 }

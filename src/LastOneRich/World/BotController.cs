@@ -19,6 +19,11 @@ public sealed class BotController
     float _jumpCd, _stumbleT, _stuckT, _lastZ;
     bool _stuckInit;
 
+    // --- Priority 6: glass-path memory ---
+    int _glassRow = -1;        // row this bot has currently committed to
+    float _glassX;             // the lane it picked for that row
+    float _glassThinkCd;       // deliberation beat before committing (reads as "remembering")
+
     public BotController(WaypointGraph graph, PersonalityDTO p, int laneSeed = 0)
     {
         _graph = graph;
@@ -198,6 +203,10 @@ public sealed class BotController
             return;
         }
 
+        // Priority 6: on a glass course the lane choice overrides plain waypoint following —
+        // the waypoints run straight down the middle and would march everyone into the void.
+        if (lv.Tiles.Count > 0 && UpdateGlassBrain(a, lv, dt)) return;
+
         if (_node < 0) _node = _graph.Nearest(a.Pos);
 
         var nodePos = _graph.Nodes[_node];
@@ -304,6 +313,168 @@ public sealed class BotController
         }
 
         lv.World.Integrate(a, dt, lv.CarryFor(a));
+    }
+
+    /// <summary>
+    /// Priority 6 — glass-path brain. Returns true when it has fully driven the actor this frame.
+    ///
+    /// The rival picks a lane for the row directly ahead, commits to it (no dithering mid-jump),
+    /// and hops across. How often it picks the CORRECT pane is gated by PuzzleSkill, which is what
+    /// finally gives that personality stat teeth: MIRA (0.95) glides across almost untouched, TANK
+    /// (0.3) plunges through most rows. A short think-beat before each commit reads on screen as a
+    /// contestant recalling the pattern rather than a robot solving it instantly.
+    ///
+    /// Deliberately honest: the bot only consults panes in the row it is about to enter, so it can
+    /// be wrong, fall, respawn and try again exactly like the player.
+    /// </summary>
+    bool UpdateGlassBrain(Actor a, Level lv, float dt)
+    {
+        // The deliberation beat is ground time: a bot cannot "remember which pane is safe" while
+        // sailing through the air. Ticking it in flight let the whole beat burn off during the
+        // 0.74s hop, so hesitation cost nothing and PuzzleSkill never slowed anyone down.
+        if (a.OnGround) _glassThinkCd = System.MathF.Max(0f, _glassThinkCd - dt);
+
+        // Find the nearest row genuinely AHEAD. The pane currently underfoot must be excluded by
+        // identity, not by a distance threshold: a plain "dz >= 0.6" test still counts your own
+        // pane while you are behind its center, which made the hop logic read a 1-2 unit gap that
+        // does not exist (it deadlocked rivals on the spot, or walked them off the lip).
+        int standingRow = int.MinValue;
+        for (int i = 0; i < lv.Tiles.Count; i++)
+            if (lv.Tiles[i].IsSolid && lv.Tiles[i].Supports(a)) { standingRow = lv.Tiles[i].Row; break; }
+
+        int bestRow = -1;
+        float bestDz = float.MaxValue;
+        for (int i = 0; i < lv.Tiles.Count; i++)
+        {
+            var t = lv.Tiles[i];
+            if (t.Row <= standingRow) continue;            // this row is under us or behind us
+            float dz = t.Pos.Z - a.Pos.Z;
+            if (dz < 0.6f) continue;                       // already crossed
+            if (dz < bestDz) { bestDz = dz; bestRow = t.Row; }
+        }
+
+        if (bestRow < 0) return false;                     // past the glass — hand back to waypoints
+        if (bestDz > 14f) return false;                    // far away — normal running is fine
+
+        // commit to a lane once per row
+        if (_glassRow != bestRow)
+        {
+            _glassRow = bestRow;
+            _glassThinkCd = (float)(0.10 + (1.0 - P.PuzzleSkill) * 0.45);
+            // Aim at a personal spot ON the chosen pane rather than dead center: with a whole
+            // field converging on one safe pane every round, exact-center targeting stacks the
+            // cast into a single column and they crack panes out from under each other.
+            // The spread is deliberately SMALL (±0.3 on a 3.2-wide pane): combined with the
+            // alignment tolerance below it must stay well inside the pane, or rivals commit
+            // their jump while actually over the neighbouring pane and PuzzleSkill stops
+            // deciding anything. Spread + tolerance must satisfy: 0.3 + 0.45 < 1.6.
+            _glassX = PickGlassLane(lv, bestRow, a.Pos.X) + MathHelper.Clamp(_lane, -1f, 1f) * 0.3f;
+        }
+
+        var wishDir = new Vector2(_glassX - a.Pos.X, 0f);
+        float lateral = System.MathF.Abs(wishDir.X);
+
+        float speed = RunSpeed(lv, a);
+        float jumpRange = speed * (2f * Phys.JumpVel / Phys.Gravity) * 0.95f;
+
+        // Launch decision, expressed against the LIP we jump from rather than a bare distance
+        // band. An earlier revision gated the hop on "bestDz > 2.2" and backed away below it;
+        // because bestDz oscillates by a few centimetres per frame around any fixed threshold,
+        // rivals chattered forward/back on the spot and never crossed. What actually matters is
+        // simpler and stable: keep running while there is pane underfoot, and jump when the lip
+        // is close. Being airborne early is harmless — the arc easily spans a 1.9-unit gap.
+        float lipDz = float.MaxValue;
+        for (int i = 0; i < lv.Tiles.Count; i++)
+        {
+            var t = lv.Tiles[i];
+            if (!t.IsSolid || !t.Supports(a)) continue;
+            lipDz = t.FarEdgeZ - a.Pos.Z;                  // distance to the edge we run off
+            break;
+        }
+        bool onLip = lipDz <= 0.85f;                       // about one stride from the drop
+
+        // A row is only ~3.6 deep, so a rival crossing it at full tilt has roughly 0.3s of
+        // runway — far less than the ~0.8s a two-lane strafe needs. Rather than let it launch
+        // half-aligned (which made PuzzleSkill irrelevant, since it landed on whatever pane was
+        // under it), hold at the lip until lined up. That is also what a real contestant does:
+        // edge up to the drop, shuffle sideways, then commit.
+        bool aligned = lateral < 0.45f;
+
+        Vector2 wish;
+        if (!aligned)
+        {
+            // Strafe diagonally while there is pane left, but ease BACK once the lip is underfoot.
+            // The brake is the important half: drifting forward off-lane is what used to walk
+            // rivals into the gap. Keeping some forward drive until then is what keeps the pack
+            // moving — a pure-lateral strafe stalls the field (swept: 0.5 clears every seed,
+            // 0.0 strands two thirds of it).
+            float fwd = onLip ? -speed * 0.15f : speed * 0.5f;
+            wish = new Vector2(System.MathF.Sign(wishDir.X) * speed, fwd);
+        }
+        else if (_glassThinkCd > 0f)
+        {
+            // The "remembering" beat. This must apply even when we touch down already on the
+            // lip: a long jump can land a fast runner within a stride of the next edge, and
+            // letting that skip the beat lets them bunny-hop lip to lip, spending so little
+            // time on each pane that a fake one never finishes cracking. That made the quickest
+            // bot immune to the glass and PuzzleSkill irrelevant to the round.
+            wish = Vector2.Zero;
+        }
+        else
+        {
+            wish = new Vector2(wishDir.X * 2.2f, speed);
+            if (wish.Length() > speed) { wish.Normalize(); wish *= speed; }
+        }
+
+        // Hop only when aligned AND the memory beat has elapsed: at the lip, or with the next
+        // row inside honest reach. Gating the launch on _glassThinkCd (not just the walk above)
+        // is what actually makes hesitation cost time on the glass.
+        if (a.OnGround && _jumpCd <= 0 && a.Stagger <= 0 && aligned && _glassThinkCd <= 0f
+            && (onLip || (bestDz <= jumpRange * 0.75f && bestDz > 3.0f)))
+        {
+            a.Vel.Y = Phys.JumpVel * (a.InSlime ? (float)lv.SlimeJumpMult : 1f);
+            _jumpCd = 0.35f;
+        }
+
+        IntegrateWish(a, lv, wish, dt);
+        return true;
+    }
+
+    /// <summary>
+    /// Choose which pane of a row to step on. A PuzzleSkill roll decides whether the bot recalls
+    /// the safe pane or guesses; a guess deliberately may land on the right one anyway, so even
+    /// dim rivals get lucky sometimes and the round never looks scripted.
+    /// </summary>
+    float PickGlassLane(Level lv, int row, float fromX)
+    {
+        var candidates = new List<BreakTile>();
+        for (int i = 0; i < lv.Tiles.Count; i++)
+            if (lv.Tiles[i].Row == row && lv.Tiles[i].IsSolid) candidates.Add(lv.Tiles[i]);
+
+        if (candidates.Count == 0) return fromX;
+
+        // Someone already proved this pane holds: a touched, still-solid pane is public knowledge,
+        // so every bot may follow it regardless of skill (that is the crowd-following fantasy).
+        foreach (var t in candidates)
+            if (t.Touched && t.Safe) return t.Pos.X;
+
+        if (Rng.Float() < P.PuzzleSkill)
+        {
+            foreach (var t in candidates)
+                if (t.Safe) return t.Pos.X;
+        }
+
+        // Guessing: pick the CLOSEST pane rather than a uniform random one. A guess that demands
+        // a two-lane sprint cannot be completed within one row's runway, so uniform guessing
+        // silently became "jump misaligned" instead of "guess wrong" — skill stopped mattering.
+        var best = candidates[0];
+        float bestD = System.MathF.Abs(best.Pos.X - fromX);
+        for (int i = 1; i < candidates.Count; i++)
+        {
+            float d = System.MathF.Abs(candidates[i].Pos.X - fromX);
+            if (d < bestD) { bestD = d; best = candidates[i]; }
+        }
+        return best.Pos.X;
     }
 
     /// <summary>Steer toward the current node. Jump when a flagged node enters honest jump range;
