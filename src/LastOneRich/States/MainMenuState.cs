@@ -12,6 +12,7 @@ public sealed class MainMenuState : IGameState
     readonly StateMachine _sm;
     Level _level;
     ArenaBackdrop _bg;
+    MenuCast _cast;       // Priority 7: idle bots milling around behind the menu
     int _sel;
     bool _howTo;
     bool _achievements;   // Priority 5: trophy case page
@@ -25,6 +26,7 @@ public sealed class MainMenuState : IGameState
     {
         _level = Level.Load("level01");
         _bg = new ArenaBackdrop(_level);
+        _cast = new MenuCast(_level);
         GameServices.Audio.PlayMusic();
     }
 
@@ -34,6 +36,7 @@ public sealed class MainMenuState : IGameState
     {
         _t += dt;
         _bg.Update(dt);
+        _cast.Update(dt);
 
         if (_howTo)
         {
@@ -94,7 +97,7 @@ public sealed class MainMenuState : IGameState
 
     public void Draw()
     {
-        _bg.Draw();
+        _bg.Draw(_cast);
         var vp = GameServices.Gfx.Viewport;
         var f = GameServices.Font;
         var sb = GameServices.Sb;
