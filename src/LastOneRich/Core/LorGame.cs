@@ -93,6 +93,7 @@ public sealed class LorGame : Game
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
         _states.Update(dt);
         Achievements.UpdateToasts(dt);   // Priority 5: unlock toasts tick in every state
+        GameServices.Audio?.Tick(dt);    // Priority 7: advances any PlayMusicFadeIn in progress
 
         // Safe point for resolution / fullscreen: after the state's Update, long before BeginDraw,
         // so resetting the device can never land between a begin/end pair.

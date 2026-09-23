@@ -11,6 +11,15 @@ public sealed class AudioBank
     readonly List<MemoryStream> _keepAlive = new();
     SoundEffectInstance _music;
 
+    // ---- Priority 7: music fade-in state, advanced by Tick() ----
+    // A fade is expressed as "grow BedVolume from 0 to its target over N seconds"; every other
+    // volume knob (MusicVolume fader, MasterVolume, per-track bed) is layered on top exactly as
+    // PushMusicVolume already does, so a fade-in still respects a mid-fade Settings change.
+    float _fadeTargetBed;
+    float _fadeElapsed;
+    float _fadeDuration;
+    bool _fading;
+
     public bool Enabled { get; private set; } = true;
 
     // ---- Priority 3: volume knobs driven by the Settings menu (0..1) ----
@@ -42,11 +51,18 @@ public sealed class AudioBank
     void PushMusicVolume()
     {
         if (_music == null) return;
-        try { _music.Volume = BedVolume * MusicVolume * MasterVolume; } catch { }
+        try { _music.Volume = Clamp01(BedVolume * MusicVolume * MasterVolume); } catch { }
     }
 
     /// <summary>The music bed level set by the last PlayMusic call (defaults to its 0.45 argument).</summary>
     float BedVolume = 0.45f;
+
+    /// <summary>
+    /// SoundEffectInstance.Volume throws OutOfRangeException outside 0..1 — every write path
+    /// (fade-in, fader math, a hand-edited settings.json with an out-of-range percent) funnels
+    /// through here rather than trusting the caller's arithmetic to stay in range.
+    /// </summary>
+    static float Clamp01(float v) => MathHelper.Clamp(v, 0f, 1f);
 
     public AudioBank(string dir)
     {
@@ -75,7 +91,7 @@ public sealed class AudioBank
         try
         {
             if (_sfx.TryGetValue(name.ToLowerInvariant(), out var sfx))
-                sfx.Play(volume * SfxVolume * MasterVolume, MathHelper.Clamp(pitch, -1f, 1f), pan);
+                sfx.Play(Clamp01(volume * SfxVolume * MasterVolume), MathHelper.Clamp(pitch, -1f, 1f), pan);
         }
         catch { Enabled = false; } // device vanished / never existed — go silent
     }
@@ -83,6 +99,7 @@ public sealed class AudioBank
     public void PlayMusic(float volume = 0.45f)
     {
         if (!Enabled) return;
+        _fading = false;       // a direct PlayMusic call always wins over any fade in flight
         BedVolume = volume;   // remember the caller's bed so a later fader change keeps it
         ApplyVolumes();       // stays in sync with the Settings menu even if a caller passes a volume
         if (_music == null && _sfx.TryGetValue("music_loop", out var m))
@@ -96,14 +113,64 @@ public sealed class AudioBank
             {
                 // BedVolume = the caller's bed level; MusicVolume is the player's music fader,
                 // MasterVolume the global one (0.45 and 1 respectively = the old behaviour).
-                _music.Volume = volume * MusicVolume * MasterVolume;
+                _music.Volume = Clamp01(volume * MusicVolume * MasterVolume);
                 if (_music.State != Microsoft.Xna.Framework.Audio.SoundState.Playing) _music.Play();
             }
             catch { Enabled = false; }
         }
     }
 
-    public void StopMusic() { if (Enabled) _music?.Stop(); }
+    /// <summary>
+    /// Priority 7: start (or restart) the music bed at zero and rise to its remembered bed level
+    /// (whatever the last PlayMusic/PlayMusicFadeIn call set, or the 0.45 default) over
+    /// <paramref name="fadeSeconds"/>, ticked by <see cref="Tick"/>. Used by the menu/welcome
+    /// flow so the bed swells in instead of snapping to full volume the instant a state loads.
+    /// A fade in progress is replaced by a new one (e.g. re-entering the menu quickly); a plain
+    /// <see cref="PlayMusic"/> call still cancels any fade immediately, as documented there.
+    /// </summary>
+    public void PlayMusicFadeIn(string id, float fadeSeconds)
+    {
+        if (!Enabled) return;
+        fadeSeconds = System.MathF.Max(0.01f, fadeSeconds);
+
+        if (_music == null && _sfx.TryGetValue(id.ToLowerInvariant(), out var m))
+        {
+            _music = m.CreateInstance();
+            _music.IsLooped = true;
+        }
+        if (_music == null) return;
+
+        _fadeTargetBed = BedVolume;   // fade toward the bed level already on record (or default)
+        BedVolume = 0f;
+        _fadeElapsed = 0f;
+        _fadeDuration = fadeSeconds;
+        _fading = true;
+
+        try
+        {
+            _music.Volume = 0f;
+            if (_music.State != Microsoft.Xna.Framework.Audio.SoundState.Playing) _music.Play();
+        }
+        catch { Enabled = false; _fading = false; }
+    }
+
+    /// <summary>
+    /// Advance any fade-in in progress. Called once per frame from <see cref="LorGame.Update"/>;
+    /// a no-op whenever nothing is fading, so states that never call PlayMusicFadeIn pay nothing.
+    /// </summary>
+    public void Tick(float dt)
+    {
+        if (!_fading || !Enabled || _music == null) return;
+
+        _fadeElapsed += dt;
+        float t = MathHelper.Clamp(_fadeElapsed / _fadeDuration, 0f, 1f);
+        BedVolume = _fadeTargetBed * t;
+        PushMusicVolume();
+
+        if (t >= 1f) _fading = false;
+    }
+
+    public void StopMusic() { if (Enabled) _music?.Stop(); _fading = false; }
 
     /// <summary>Fire-and-forget sfx by event name; tolerant of missing clips.</summary>
     public void Event(string name)
