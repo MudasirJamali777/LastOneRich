@@ -205,6 +205,24 @@ public sealed class GameplayState : IGameState
         _screen.FadeTo(0f, 2.5f);
     }
 
+    /// <summary>Pause immediately when the host window loses focus.</summary>
+    public bool PauseForDeactivation()
+    {
+        if (_pause || _lv == null || _actors.Count == 0) return false;
+        _pause = true;
+        _pauseMenu.Open();
+        Input.SetMouseCapture(false);
+        return true;
+    }
+
+    /// <summary>Resume the focus-loss pause and restore gameplay mouse capture.</summary>
+    public void ResumeAfterActivation()
+    {
+        if (!_pause) return;
+        _pause = false;
+        SyncMouseCapture();
+    }
+
     public void Exit() => Input.SetMouseCapture(false);
 
     public void Update(float dt)

@@ -13,6 +13,7 @@ public sealed class LorGame : Game
     readonly LaunchArgs _launch;
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     double _lastUpdate;
+    bool _deactivatedMidGameplay;
 
     /// <summary>0..1 factor for rendering between the previous and current physics step.</summary>
     public static float InterpAlpha;
@@ -45,7 +46,27 @@ public sealed class LorGame : Game
 
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        Window.Title = "LAST ONE RICH! — Volt Dome (Season 1)";
+        Window.Title = "LAST ONE RICH";
+
+        try
+        {
+            string iconPath = Path.Combine(AppContext.BaseDirectory, "Content", "gfx", "icon.ico");
+            if (!File.Exists(iconPath)) iconPath = Json.PathFor("gfx/icon.ico");
+            using var icon = File.OpenRead(iconPath);
+            var setIcon = Window.GetType().GetMethod(
+                "SetIcon",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Stream) },
+                modifiers: null);
+            setIcon?.Invoke(Window, new object[] { icon });
+        }
+        catch { }
+
+        Deactivated += OnDeactivated;
+        Activated += OnActivated;
 
         // Rendering baseline (rendering task): MSAA on. Reach profile = maximum
         // compatibility (old GPUs / software GL / VMs); slice vertex counts are tiny.
@@ -58,6 +79,21 @@ public sealed class LorGame : Game
         // because IsFixedTimeStep = true keeps simulating at 60 Hz regardless.
         IsFixedTimeStep = true;
         TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
+    }
+
+    void OnDeactivated(object sender, EventArgs e)
+    {
+        if (_states?.Current is GameplayState gameplay && gameplay.PauseForDeactivation())
+            _deactivatedMidGameplay = true;
+        Input.SetMouseCapture(false);
+    }
+
+    void OnActivated(object sender, EventArgs e)
+    {
+        if (!_deactivatedMidGameplay) return;
+        _deactivatedMidGameplay = false;
+        if (_states?.Current is GameplayState gameplay)
+            gameplay.ResumeAfterActivation();
     }
 
     protected override void Initialize()
