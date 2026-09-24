@@ -68,6 +68,9 @@ public sealed class WorldParticles
             Glow = glow,
             Alive = true,
         };
+#if DEBUG
+        System.Diagnostics.Debug.Assert(Count <= Max, "World particle pool capacity exceeded.");
+#endif
     }
 
     /// <summary>
