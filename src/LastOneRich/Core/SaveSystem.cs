@@ -107,6 +107,21 @@ public static class SaveSystem
         catch { /* best effort, same policy as before */ }
     }
 
+    /// <summary>Best-effort atomic crash report containing the UTC timestamp and full exception chain.</summary>
+    public static void WriteCrashLog(Exception exception)
+    {
+        try
+        {
+            Directory.CreateDirectory(Dir);
+            string temp = Path.Combine(Dir, "crash.log.tmp");
+            string target = Path.Combine(Dir, "crash.log");
+            string text = $"Crash timestamp (UTC): {System.DateTime.UtcNow:o}{Environment.NewLine}{Environment.NewLine}{exception}{Environment.NewLine}";
+            File.WriteAllText(temp, text);
+            File.Move(temp, target, true);
+        }
+        catch { /* crash reporting must never hide the original failure */ }
+    }
+
     static SaveData Migrate(SaveData d)
     {
         // v1 -> v2: the v2 fields are absent from old files, so they arrive as CLR defaults —

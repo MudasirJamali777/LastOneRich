@@ -37,6 +37,14 @@ Everything visual is primitives + a generated bitmap font; everything audible is
 dotnet run --project src/LastOneRich -c Release
 ```
 
+## Building for Release
+
+Create a self-contained Windows x64 release build with:
+
+```bash
+dotnet publish src/LastOneRich/LastOneRich.Game.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+```
+
 ### Headless validation harness (CI / balance testing)
 Simulates real races with the *same physics + AI code* the game uses (no GPU, no window):
 ```bash

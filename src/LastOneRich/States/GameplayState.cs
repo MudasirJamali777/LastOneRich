@@ -46,9 +46,11 @@ public sealed class GameplayState : IGameState
     float _twistBannerT = 99f;
     Color _twistSev = new(255, 210, 63);
 
+#if DEBUG
     // Debug overlay data (F3): raw screen intent vs resolved world XZ.
     public static Vector2 DebugMoveRaw = Vector2.Zero;
     public static Vector2 DebugMoveXZ = Vector2.Zero;
+#endif
 
     public GameplayState(StateMachine sm, SeasonRun season) { _sm = sm; _season = season; }
 
@@ -129,7 +131,7 @@ public sealed class GameplayState : IGameState
             var errs = TwistValidator.ValidateSelection(twists, round.Round);
             if (errs.Count > 0)
             {
-                foreach (var e in errs) System.Console.WriteLine($"[validator] rejecting twist: {e}");
+                foreach (var e in errs) GameLog.Log($"[validator] rejecting twist: {e}");
                 twists = null; // fail safe: run clean rather than invalid
                 _season.ActiveTwist = null;
             }
@@ -203,6 +205,24 @@ public sealed class GameplayState : IGameState
         _screen.FadeTo(0f, 2.5f);
     }
 
+    /// <summary>Pause immediately when the host window loses focus.</summary>
+    public bool PauseForDeactivation()
+    {
+        if (_pause || _lv == null || _actors.Count == 0) return false;
+        _pause = true;
+        _pauseMenu.Open();
+        Input.SetMouseCapture(false);
+        return true;
+    }
+
+    /// <summary>Resume the focus-loss pause and restore gameplay mouse capture.</summary>
+    public void ResumeAfterActivation()
+    {
+        if (!_pause) return;
+        _pause = false;
+        SyncMouseCapture();
+    }
+
     public void Exit() => Input.SetMouseCapture(false);
 
     public void Update(float dt)
@@ -260,9 +280,13 @@ public sealed class GameplayState : IGameState
                 // Mouse-look movement: W goes where the camera looks, A/D strafe,
                 // S backs away — all relative to the camera yaw.
                 var raw = Input.Move;
+#if DEBUG
                 DebugMoveRaw = raw;
+#endif
                 var mv = ResolveMove(raw);
+#if DEBUG
                 DebugMoveXZ = mv;
+#endif
                 var inp = new InputState
                 {
                     Move = mv,

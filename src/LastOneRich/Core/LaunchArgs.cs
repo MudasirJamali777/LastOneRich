@@ -4,8 +4,11 @@ public sealed class LaunchArgs
 {
     public string ShotPath;    // if set, save a screenshot at ShotFrame then exit
     public int ShotFrame = -1;
+
+#if DEBUG
     public string Goto;        // dev shortcut: menu | intro | game (skips straight there)
     public bool Overlay;       // start with the F3 debug overlay visible
+    public bool AchieveAll;    // dev shortcut: unlock every achievement on boot
     public int Round = 1;      // dev shortcut with --goto=game: start at this season round
 
     /// <summary>
@@ -14,6 +17,7 @@ public sealed class LaunchArgs
     /// stays untouched, so the next normal launch retries it.
     /// </summary>
     public bool SafeMode;
+#endif
 
     public static LaunchArgs Parse(string[] args)
     {
@@ -27,11 +31,14 @@ public sealed class LaunchArgs
             switch (key)
             {
                 case "shot": a.ShotPath = val; break;
+                case "shot-frame": int.TryParse(val, out a.ShotFrame); break;
+#if DEBUG
                 case "goto": a.Goto = val.ToLowerInvariant(); break;
                 case "overlay": a.Overlay = true; break;
+                case "achieve-all": a.AchieveAll = true; break;
                 case "safe": a.SafeMode = true; break;
-                case "shot-frame": int.TryParse(val, out a.ShotFrame); break;
                 case "round": int.TryParse(val, out a.Round); break;
+#endif
             }
         }
         return a;

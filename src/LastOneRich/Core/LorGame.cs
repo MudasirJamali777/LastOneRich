@@ -13,6 +13,7 @@ public sealed class LorGame : Game
     readonly LaunchArgs _launch;
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     double _lastUpdate;
+    bool _deactivatedMidGameplay;
 
     /// <summary>0..1 factor for rendering between the previous and current physics step.</summary>
     public static float InterpAlpha;
@@ -23,11 +24,14 @@ public sealed class LorGame : Game
         _launch = launch;
 
         // Boot safety, decided before anything reads the display settings:
-        //   --safe            → opt out by hand
+        //   --safe            → opt out by hand (debug builds only)
         //   stale boot probe  → the previous launch applied a mode and never reached a frame,
         //                       so ignore the overrides ONCE (settings.json is left intact and
         //                       retried next time, which is when the player can fix it in-game)
-        bool rescue = launch?.SafeMode == true;
+        bool rescue = false;
+#if DEBUG
+        rescue = launch?.SafeMode == true;
+#endif
         if (!rescue && SettingsStore.BootProbeStale())
         {
             rescue = true;
@@ -42,7 +46,27 @@ public sealed class LorGame : Game
 
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        Window.Title = "LAST ONE RICH! — Volt Dome (Season 1)";
+        Window.Title = "LAST ONE RICH";
+
+        try
+        {
+            string iconPath = Path.Combine(AppContext.BaseDirectory, "Content", "gfx", "icon.ico");
+            if (!File.Exists(iconPath)) iconPath = Json.PathFor("gfx/icon.ico");
+            using var icon = File.OpenRead(iconPath);
+            var setIcon = Window.GetType().GetMethod(
+                "SetIcon",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Stream) },
+                modifiers: null);
+            setIcon?.Invoke(Window, new object[] { icon });
+        }
+        catch { }
+
+        Deactivated += OnDeactivated;
+        Activated += OnActivated;
 
         // Rendering baseline (rendering task): MSAA on. Reach profile = maximum
         // compatibility (old GPUs / software GL / VMs); slice vertex counts are tiny.
@@ -55,6 +79,21 @@ public sealed class LorGame : Game
         // because IsFixedTimeStep = true keeps simulating at 60 Hz regardless.
         IsFixedTimeStep = true;
         TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
+    }
+
+    void OnDeactivated(object sender, EventArgs e)
+    {
+        if (_states?.Current is GameplayState gameplay && gameplay.PauseForDeactivation())
+            _deactivatedMidGameplay = true;
+        Input.SetMouseCapture(false);
+    }
+
+    void OnActivated(object sender, EventArgs e)
+    {
+        if (!_deactivatedMidGameplay) return;
+        _deactivatedMidGameplay = false;
+        if (_states?.Current is GameplayState gameplay)
+            gameplay.ResumeAfterActivation();
     }
 
     protected override void Initialize()
@@ -79,7 +118,9 @@ public sealed class LorGame : Game
         GameServices.Init(GraphicsDevice, sb, _launch);
         AudioBank.ApplyVolumes();                 // settings ▸ Audio takes effect before the first sound
         _gfx.SynchronizeWithVerticalRetrace = Keybinds.VSync; // live VSync (no device reset needed)
+#if DEBUG
         if (_launch?.Overlay == true) GameServices.DebugOverlay = true;
+#endif
         _states = new StateMachine();
         _states.Replace(new BootState(_states));
     }
@@ -87,7 +128,9 @@ public sealed class LorGame : Game
     protected override void Update(GameTime gameTime)
     {
         Input.Update();
+#if DEBUG
         if (Input.PressedAction("DebugOverlay")) GameServices.DebugOverlay = !GameServices.DebugOverlay;
+#endif
 
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
@@ -119,7 +162,9 @@ public sealed class LorGame : Game
         GeometryRenderer.FogOn = Keybinds.FogEnabled;
 
         _states.Draw();
+#if DEBUG
         if (GameServices.DebugOverlay) DrawDebugOverlay();
+#endif
         DrawAchievementToasts();   // Priority 5: ride above whatever the state drew
         base.Draw(gameTime);
 
@@ -162,6 +207,7 @@ public sealed class LorGame : Game
         base.OnExiting(sender, args);
     }
 
+#if DEBUG
     /// <summary>F3 overlay: FPS + move-vector indicators (acceptance: A/D/W/S must match these).</summary>
     void DrawDebugOverlay()
     {
@@ -200,4 +246,5 @@ public sealed class LorGame : Game
 
         Ui.End();
     }
+#endif
 }

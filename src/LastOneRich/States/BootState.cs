@@ -15,6 +15,14 @@ public sealed class BootState : IGameState
 
     public void Update(float dt)
     {
+#if DEBUG
+        if (GameServices.Launch?.AchieveAll == true)
+        {
+            foreach (var achievement in Achievements.All)
+                Achievements.Unlock(achievement.Id);
+            GameServices.Launch.AchieveAll = false;
+        }
+
         // dev shortcut for screenshots / fast testing: --goto=menu|intro|game
         var gotoArg = GameServices.Launch?.Goto;
         if (gotoArg == "game")
@@ -34,6 +42,7 @@ public sealed class BootState : IGameState
             _sm.Replace(new MainMenuState(_sm));
             return;
         }
+#endif
         _t += dt;
         if (_t > 2.1f || Input.SkipPressed)
         {

@@ -65,7 +65,7 @@ public sealed class Level
         // with a warning HUD instead of misbehaving (data errors degrade, never crash).
         if (!KnownTypes.Contains(Dto.Type))
         {
-            System.Console.WriteLine($"[level] '{Dto.Name}': unknown mode '{Dto.Type}' — using Race rules");
+            GameLog.Log($"[level] '{Dto.Name}': unknown mode '{Dto.Type}' — using Race rules");
             FallbackMode = true;
             Dto.Type = "Race";
         }

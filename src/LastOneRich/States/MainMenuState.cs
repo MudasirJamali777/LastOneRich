@@ -103,7 +103,7 @@ public sealed class MainMenuState : IGameState
                     var run = SeasonRun.Create();
                     var errors = TwistValidator.ValidateSeason(run);
                     foreach (var e in errors)
-                        System.Console.WriteLine($"[validator] {e}");
+                        GameLog.Log($"[validator] {e}");
                     _sm.Replace(new IntroCutsceneState(_sm, run));
                     break;
                 case 1:
