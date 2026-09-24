@@ -104,7 +104,14 @@ public sealed class MainMenuState : IGameState
                     var errors = TwistValidator.ValidateSeason(run);
                     foreach (var e in errors)
                         GameLog.Log($"[validator] {e}");
-                    _sm.Replace(new IntroCutsceneState(_sm, run));
+                    // QA pass: the validator's findings were logged and then thrown away, so a
+                    // broken content edit started a season anyway and failed later, somewhere
+                    // less legible. ContentErrorState exists precisely for this (GDD §14) and
+                    // was reachable from nowhere — it is the season's front door now.
+                    if (errors.Count > 0)
+                        _sm.Replace(new ContentErrorState(_sm, errors));
+                    else
+                        _sm.Replace(new IntroCutsceneState(_sm, run));
                     break;
                 case 1:
                     _howTo = true;
