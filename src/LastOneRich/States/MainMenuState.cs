@@ -7,11 +7,13 @@ namespace LastOneRich.States;
 
 public sealed class MainMenuState : IGameState
 {
-    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "ACHIEVEMENTS", "SETTINGS", "QUIT" };
+    // Priority 7: CREDITS added ahead of QUIT — every switch arm below is renumbered to match.
+    static readonly string[] Items = { "NEW SEASON", "HOW TO PLAY", "ACHIEVEMENTS", "SETTINGS", "CREDITS", "QUIT" };
 
     readonly StateMachine _sm;
     Level _level;
     ArenaBackdrop _bg;
+    MenuCast _cast;       // Priority 7: idle bots milling around behind the menu
     int _sel;
     bool _howTo;
     bool _achievements;   // Priority 5: trophy case page
@@ -19,13 +21,24 @@ public sealed class MainMenuState : IGameState
     readonly SettingsScreen _settings = new();
     float _t;
 
+    // Priority 7: per-row hover/select "heat" — eases toward 1 while hot, decays back to 0
+    // otherwise, driving the glow strength, gold frame alpha and text scale together so a
+    // selection change reads as a smooth pulse-up rather than an instant snap.
+    readonly float[] _heat = new float[Items.Length];
+    readonly System.Collections.Generic.List<Rectangle> _itemRects = new();
+
     public MainMenuState(StateMachine sm) => _sm = sm;
 
     public void Enter()
     {
         _level = Level.Load("level01");
         _bg = new ArenaBackdrop(_level);
-        GameServices.Audio.PlayMusic();
+        _cast = new MenuCast(_level);
+        _t = 0f;
+        System.Array.Clear(_heat, 0, _heat.Length);
+        // Priority 7: bed swells in over 1.2s instead of snapping to full volume on entry —
+        // most noticeable the very first time the menu appears, right after the boot splash.
+        GameServices.Audio.PlayMusicFadeIn("music_loop", 1.2f);
     }
 
     public void Exit() { }
@@ -34,6 +47,7 @@ public sealed class MainMenuState : IGameState
     {
         _t += dt;
         _bg.Update(dt);
+        _cast.Update(dt);
 
         if (_howTo)
         {
@@ -63,7 +77,24 @@ public sealed class MainMenuState : IGameState
         if (Input.UpPressed) { _sel = (_sel + Items.Length - 1) % Items.Length; GameServices.Audio.Event("blip"); }
         if (Input.DownPressed) { _sel = (_sel + 1) % Items.Length; GameServices.Audio.Event("blip"); }
 
-        if (Input.ConfirmPressed)
+        // Mouse hover moves the highlight (only when the cursor actually moved, so it never
+        // fights keyboard/gamepad navigation), and a click on the highlighted row activates it —
+        // the same two-stage rule PauseMenu and SettingsScreen already use.
+        var m = Input.MouseUi(GameServices.Gfx.Viewport);
+        int hover = HitIndex(m);
+        bool click = Input.MouseLeftPressed;
+        if (Input.MouseMoved && hover >= 0 && hover != _sel) { _sel = hover; GameServices.Audio.Event("blip"); }
+
+        bool activate = Input.ConfirmPressed || (click && hover >= 0 && hover == _sel);
+
+        // Heat: ease every row toward 1 (selected) or 0 (not) — smoother than a binary highlight.
+        for (int i = 0; i < Items.Length; i++)
+        {
+            float target = i == _sel ? 1f : 0f;
+            _heat[i] += (target - _heat[i]) * MathHelper.Clamp(dt * 10f, 0f, 1f);
+        }
+
+        if (activate)
         {
             GameServices.Audio.Event("cash");
             switch (_sel)
@@ -86,15 +117,25 @@ public sealed class MainMenuState : IGameState
                     _settingsOpen = true;
                     break;
                 case 4:
+                    _sm.Replace(new CreditsState(_sm));
+                    break;
+                case 5:
                     _sm.Quit();
                     break;
             }
         }
     }
 
+    int HitIndex(Vector2 m)
+    {
+        for (int i = 0; i < _itemRects.Count; i++)
+            if (_itemRects[i].Contains((int)m.X, (int)m.Y)) return i;
+        return -1;
+    }
+
     public void Draw()
     {
-        _bg.Draw();
+        _bg.Draw(_cast);
         var vp = GameServices.Gfx.Viewport;
         var f = GameServices.Font;
         var sb = GameServices.Sb;
@@ -104,29 +145,64 @@ public sealed class MainMenuState : IGameState
         Ui.Rect(new Vector2(0, 0), new Vector2(1280, 190), new Color(8, 8, 18, 160));
         Ui.Rect(new Vector2(0, 186), new Vector2(1280, 4), new Color(255, 210, 63, 220));
 
-        float pulse = 0.85f + 0.15f * MathF.Sin(_t * 3f);
+        // ---- Priority 7: title breathing scale + gold glow ----
+        // A slow (0.6 Hz) breathing scale on top of the old faster pulse, plus a soft oversized
+        // glow copy drawn first so the crisp outlined title sits on a warm halo instead of the
+        // flat backdrop panel.
+        float fastPulse = 0.85f + 0.15f * MathF.Sin(_t * 3f);
+        float breathe = 1f + 0.035f * MathF.Sin(_t * 1.9f);
         string title = "LAST ONE RICH!";
-        var ts = f.Measure(title, 2.6f);
-        f.DrawOutlined(sb, title, new Vector2(640, 46), new Color(255, 210, 63) * pulse, 2.6f, 0f, new Vector2(ts.X / 2, 0));
-        string sub = "A VOLT DOME MEGA-CHALLENGE";
+        float baseScale = 2.6f * breathe;
+        var ts = f.Measure(title, baseScale);
+        float glowAlpha = 0.28f + 0.12f * MathF.Sin(_t * 1.9f + 1.2f);
+        var glowScale = baseScale * 1.04f;
+        var gs = f.Measure(title, glowScale);
+        f.Draw(sb, title, new Vector2(640, 46), new Color(255, 210, 63) * glowAlpha, glowScale, 0f, new Vector2(gs.X / 2, 0));
+        f.DrawOutlined(sb, title, new Vector2(640, 46), new Color(255, 210, 63) * fastPulse, baseScale, 0f, new Vector2(ts.X / 2, 0));
+
+        // Priority 7: replaces the old generic subtitle with the tagline the spec asks for.
+        string sub = "COMPETE. SURVIVE. CASH OUT... OR RISK IT ALL.";
         var ss = f.Measure(sub, 0.62f);
         f.Draw(sb, sub, new Vector2(640, 140), new Color(200, 210, 255), 0.62f, 0f, new Vector2(ss.X / 2, 0), true);
 
         // menu items
         bool overlay = _howTo || _achievements || _settingsOpen;
+        _itemRects.Clear();
         for (int i = 0; i < Items.Length; i++)
         {
             bool selected = i == _sel && !overlay;
-            var size = f.Measure(Items[i], 1.05f);
-            var pos = new Vector2(640, 300 + i * 74);
-            if (selected)
+            float heat = overlay ? 0f : _heat[i];
+
+            // Entry rise-in: each row eases up from below into its resting spot, staggered by
+            // index so the list reads as cascading in rather than popping all at once.
+            float delay = i * 0.05f;
+            float rise = MathHelper.Clamp((_t - delay) / 0.35f, 0f, 1f);
+            rise = 1f - (1f - rise) * (1f - rise); // ease-out
+            float yOffset = (1f - rise) * 40f;
+
+            float scale = 1.05f + heat * 0.08f;
+            var size = f.Measure(Items[i], scale);
+            float baseY = 300 + i * 74;
+            var pos = new Vector2(640, baseY + yOffset);
+
+            var rowRect = new Rectangle((int)(640 - size.X / 2 - 34), (int)(pos.Y - 12), (int)(size.X + 68), (int)(size.Y + 22));
+            _itemRects.Add(rowRect);
+
+            if (heat > 0.01f)
             {
-                Ui.Rect(new Vector2(640 - size.X / 2 - 34, pos.Y - 12), new Vector2(size.X + 68, size.Y + 22), new Color(255, 210, 63, 40));
-                Ui.Frame(new Rectangle((int)(640 - size.X / 2 - 34), (int)(pos.Y - 12), (int)(size.X + 68), (int)(size.Y + 22)), 2, new Color(255, 210, 63, 200));
+                Ui.Rect(rowRect, new Color(255, 210, 63, (int)(40 * heat)));
+                Ui.Frame(rowRect, 2, new Color(255, 210, 63, (int)(200 * heat)));
             }
-            f.DrawOutlined(sb, Items[i], pos, selected ? new Color(255, 240, 180) : new Color(190, 195, 220), 1.05f, 0f, new Vector2(size.X / 2, 0));
-            if (selected)
-                f.Draw(sb, ">", new Vector2(640 - size.X / 2 - 26, pos.Y), new Color(255, 210, 63), 1.05f, 0f, new Vector2(f.Measure(">", 1.05f).X, 0));
+
+            var col = Color.Lerp(new Color(190, 195, 220), new Color(255, 240, 180), heat) * MathHelper.Clamp(rise, 0.001f, 1f);
+            f.DrawOutlined(sb, Items[i], pos, col, scale, 0f, new Vector2(size.X / 2, 0));
+
+            if (heat > 0.01f)
+            {
+                // Bobbing marker: gentle horizontal drift so the arrow reads as alive, not static.
+                float bob = MathF.Sin(_t * 5f) * 4f;
+                f.Draw(sb, ">", new Vector2(640 - size.X / 2 - 26 + bob, pos.Y), new Color(255, 210, 63) * heat, scale, 0f, new Vector2(f.Measure(">", scale).X, 0));
+            }
         }
 
         // career footer (Priority 4 stats + Priority 5 trophy count)

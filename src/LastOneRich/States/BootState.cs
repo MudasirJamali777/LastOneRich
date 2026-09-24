@@ -35,7 +35,14 @@ public sealed class BootState : IGameState
             return;
         }
         _t += dt;
-        if (_t > 2.1f || Input.SkipPressed) _sm.Replace(new MainMenuState(_sm));
+        if (_t > 2.1f || Input.SkipPressed)
+        {
+            // Priority 7: a brand-new career (no save file yet) or an old save that predates
+            // this screen (WelcomeSeen defaults false on migration) sees the welcome/difficulty
+            // screen exactly once instead of dropping straight into the main menu.
+            bool firstRun = !SaveSystem.HasSave() || !(GameServices.Save?.WelcomeSeen ?? false);
+            _sm.Replace(firstRun ? new WelcomeState(_sm) : new MainMenuState(_sm));
+        }
     }
 
     public void Draw()

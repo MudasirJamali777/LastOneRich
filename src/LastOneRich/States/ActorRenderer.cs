@@ -1,4 +1,5 @@
 using LastOneRich.Core;
+using LastOneRich.Season;
 using LastOneRich.World;
 using Microsoft.Xna.Framework;
 
@@ -66,7 +67,13 @@ public sealed class ArenaBackdrop
         _cam.FovDeg = 55f;
     }
 
-    public void Draw()
+    /// <summary>
+    /// <paramref name="cast"/> is optional (Priority 7): when supplied, its actors are drawn
+    /// alongside the arena using the exact same interpolated renderer gameplay uses, so the
+    /// menu's idle bots read as real contestants rather than a separate cosmetic pass.
+    /// Callers outside the menu simply omit it and nothing changes.
+    /// </summary>
+    public void Draw(MenuCast cast = null)
     {
         var vp = GameServices.Gfx.Viewport;
         if (Level == null)
@@ -79,6 +86,9 @@ public sealed class ArenaBackdrop
         var r = GameServices.Renderer;
         r.BeginFrame(_cam, vp.Width / (float)vp.Height, Level.SkyColor);
         Level.Draw(r);
+        if (cast != null)
+            foreach (var a in cast.Actors)
+                ActorRenderer.Draw(r, a, LorGame.InterpAlpha);
         r.EndFrame();
     }
 }

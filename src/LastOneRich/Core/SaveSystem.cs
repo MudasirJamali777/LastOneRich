@@ -29,6 +29,13 @@ public sealed class SaveData
 
     /// <summary>Unlocked achievement ids (Priority 5). Ids are stable; see Achievements.All.</summary>
     public List<string> Achievements { get; set; } = new();
+
+    /// <summary>
+    /// Priority 7: has the player clicked through the first-run welcome/difficulty screen?
+    /// Defaults false so a save.json written before this field existed (schema v2) still shows
+    /// the welcome screen exactly once, the same as a brand-new career would.
+    /// </summary>
+    public bool WelcomeSeen { get; set; }
 }
 
 public static class SaveSystem
@@ -45,6 +52,18 @@ public static class SaveSystem
     static string PathFor() => Path.Combine(Dir, "save.json");
     static string BackupFor() => Path.Combine(Dir, "save.json.bak");
     static string TempFor() => Path.Combine(Dir, "save.json.tmp");
+
+    /// <summary>
+    /// Priority 7: true when a career file already exists on disk (main OR backup — either one
+    /// means this is a returning player, not a first launch). Deliberately a cheap existence
+    /// check rather than a full Load(): BootState calls this before GameServices.Save even
+    /// exists, and existence is all a first-run decision needs.
+    /// </summary>
+    public static bool HasSave()
+    {
+        try { return File.Exists(PathFor()) || File.Exists(BackupFor()); }
+        catch { return false; }
+    }
 
     /// <summary>
     /// Load the career save. Priority 4 hardening:
