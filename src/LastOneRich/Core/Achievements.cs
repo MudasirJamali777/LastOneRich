@@ -85,7 +85,7 @@ public static class Achievements
         SaveSystem.Store(save);
         QueueToast(Find(id));
         GameServices.Audio?.Event("achievement");
-        System.Console.WriteLine($"[achievements] unlocked: {id}");
+        GameLog.Log($"[achievements] unlocked: {id}");
         return true;
     }
 

@@ -49,7 +49,7 @@ public sealed class SeasonRun
     public int RoundIdx;
     public TwistDTO ActiveTwist;
     public readonly HashSet<string> Upgrades = new();   // auction advantages (GDD L10)
-    public bool ConsumeUpgrade(string id) { if (Upgrades.Remove(id)) { System.Console.WriteLine($"[upgrade] consumed {id}"); return true; } return false; }
+    public bool ConsumeUpgrade(string id) { if (Upgrades.Remove(id)) { GameLog.Log($"[upgrade] consumed {id}"); return true; } return false; }
     public string SabotageFlavor = "";
     public Level CurrentLevel;
     public RaceTracker Tracker;

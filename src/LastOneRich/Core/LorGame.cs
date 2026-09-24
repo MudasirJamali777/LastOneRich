@@ -23,11 +23,14 @@ public sealed class LorGame : Game
         _launch = launch;
 
         // Boot safety, decided before anything reads the display settings:
-        //   --safe            → opt out by hand
+        //   --safe            → opt out by hand (debug builds only)
         //   stale boot probe  → the previous launch applied a mode and never reached a frame,
         //                       so ignore the overrides ONCE (settings.json is left intact and
         //                       retried next time, which is when the player can fix it in-game)
-        bool rescue = launch?.SafeMode == true;
+        bool rescue = false;
+#if DEBUG
+        rescue = launch?.SafeMode == true;
+#endif
         if (!rescue && SettingsStore.BootProbeStale())
         {
             rescue = true;
@@ -79,7 +82,9 @@ public sealed class LorGame : Game
         GameServices.Init(GraphicsDevice, sb, _launch);
         AudioBank.ApplyVolumes();                 // settings ▸ Audio takes effect before the first sound
         _gfx.SynchronizeWithVerticalRetrace = Keybinds.VSync; // live VSync (no device reset needed)
+#if DEBUG
         if (_launch?.Overlay == true) GameServices.DebugOverlay = true;
+#endif
         _states = new StateMachine();
         _states.Replace(new BootState(_states));
     }
@@ -87,7 +92,9 @@ public sealed class LorGame : Game
     protected override void Update(GameTime gameTime)
     {
         Input.Update();
+#if DEBUG
         if (Input.PressedAction("DebugOverlay")) GameServices.DebugOverlay = !GameServices.DebugOverlay;
+#endif
 
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         dt = MathHelper.Min(dt, 1f / 20f); // clamp hitches (alt-tab safety)
@@ -119,7 +126,9 @@ public sealed class LorGame : Game
         GeometryRenderer.FogOn = Keybinds.FogEnabled;
 
         _states.Draw();
+#if DEBUG
         if (GameServices.DebugOverlay) DrawDebugOverlay();
+#endif
         DrawAchievementToasts();   // Priority 5: ride above whatever the state drew
         base.Draw(gameTime);
 
@@ -162,6 +171,7 @@ public sealed class LorGame : Game
         base.OnExiting(sender, args);
     }
 
+#if DEBUG
     /// <summary>F3 overlay: FPS + move-vector indicators (acceptance: A/D/W/S must match these).</summary>
     void DrawDebugOverlay()
     {
@@ -200,4 +210,5 @@ public sealed class LorGame : Game
 
         Ui.End();
     }
+#endif
 }

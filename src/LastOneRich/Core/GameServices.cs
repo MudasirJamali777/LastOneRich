@@ -15,7 +15,9 @@ public static class GameServices
     public static Texture2D Particle;
     public static SaveData Save;
     public static LaunchArgs Launch;
+#if DEBUG
     public static bool DebugOverlay; // toggled with F3 (controls.json: debugOverlay)
+#endif
 
     public static void Init(GraphicsDevice gfx, SpriteBatch sb, LaunchArgs launch)
     {
