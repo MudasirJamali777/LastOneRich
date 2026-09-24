@@ -1,348 +1,345 @@
 # LAST ONE RICH! — Season 1
 
-A "viral mega-challenge show" competition game (original fictional branding, MrBeast-style *energy*),
-built with **C# / .NET 8 + MonoGame DesktopGL** — Visual Studio only, code-first, data-driven.
-
-The GDD §19 vertical slice has been expanded into the **full 12-round Season 1**, then given a
-full **graphics + polish pass** (3-light rig, baked static meshes, visual language, fixed-step
-render interpolation, drop shadows, name tags, HUD upgrade):
-
-> intro cutscene (tokenized JSON template) → 12 rounds across 6 game modes →
-> results ceremony + data-driven elimination → Bank vs Risk → cash-out offers →
-> the Auction of Doom intermission → twist reveals → grand-finale "The Button" → champion ending
-
-The whole season is machine-verified: the headless harness simulates all 12 rounds with the
-real physics/AI/scoring code — **ALL CHECKS PASSED ✔**, exit code 0.
-
-Everything visual is primitives + a generated bitmap font; everything audible is generated WAVs.
-**No Content Pipeline (.mgcb), no external editor, no native tools** — build and run.
-
 ![gameplay](docs/shot_gameplay.png)
+
+**Version 1.0.0 · release** — built with **C# / .NET 8 + MonoGame DesktopGL**.
 
 ---
 
-## 1) Quick start
+## Contents
+
+1. [The game](#1-the-game)
+2. [Controls](#2-controls)
+3. [How to run](#3-how-to-run)
+4. [How to build a release](#4-how-to-build-a-release)
+5. [The content folder](#5-the-content-folder)
+6. [Achievements](#6-achievements)
+7. [QA tooling](#7-qa-tooling)
+8. [Credits](#8-credits)
+
+---
+
+## 1) The game
+
+**LAST ONE RICH!** is a single-player third-person elimination game show. You are contestant
+number 24 in the Volt Dome, a televised mega-challenge where twenty-four people walk in, one
+walks out a millionaire, and the host is enjoying himself far too much.
+
+A season is **twelve rounds across six game modes**. Every round, the field runs, dodges,
+collects or survives; at the results ceremony the bottom slice of the leaderboard is
+eliminated on camera. Between rounds you face the part that actually hurts: the money.
+
+* **Earn.** Every round pays a base reward plus placement, top-half and speed bonuses.
+* **Bank or Risk.** Bank your winnings and they are safe forever. Risk them and the pot
+  **doubles** if you survive the next round — and vanishes completely if you do not.
+* **Cash out.** After rounds 2, 4, 6 and 8 the host offers you real money to walk away now.
+  Take $500,000 and go home, or chase the **$1,000,000** grand prize.
+* **Twists.** Between rounds, twists are drawn from a per-round pool and validated before
+  they run: faster conveyors, harder wind, turbo hammers, brittle glass, a shorter clock.
+* **The Auction of Doom** (round 10) is an intermission — spend your banked cash on a strike
+  shield, an extra life, a sabotage token, a golden ticket or a twist preview.
+* **The Button** (round 12) is the finale: three contestants, one king-of-the-hill pad,
+  last one standing is the last one rich.
+
+### The twelve rounds
+
+| # | round | mode | elimination |
+|---|---|---|---|
+| 1 | WELCOME RUN | Race (obstacle course) | TimeTrialRankCut 20% |
+| 2 | SHRINKING SPOTLIGHT | SurvivalZone (the spotlight shrinks) | ScoreRankCut 25% |
+| 3 | DRONE DODGE | StrikesOut (3 scans and you are out) | StrikesOut |
+| 4 | PRIZE SHOP MAZE | Race through a conveyor maze | TimeTrialRankCut 8% |
+| 5 | BLOCK BOOM TOWER | ScoreCollect (vault → deposit) | ScoreRankCut 8% |
+| 6 | GLASS PATH MEMORY | Race over breakable glass panes | TimeTrialRankCut 8% |
+| 7 | TRIVIA GATES | Race through trivia door walls | TimeTrialRankCut 8% |
+| 8 | THE HEIST | ScoreCollect under swinging hammers | ScoreRankCut 8% |
+| 9 | FREEZING ROOM | SurvivalZone on ice | ScoreRankCut 25% |
+| 10 | THE AUCTION OF DOOM | intermission — spend your cash | — |
+| 11 | MEGA GAUNTLET | Race remixing rounds 1–9 | TopNAdvance (top 3) |
+| 12 | THE BUTTON | FinaleButton (king of the hill) | last one standing wins |
+
+Round 10 is the only round with no level file: it is an intermission, and `season.json`
+records its level as `"none"` on purpose.
+
+### How it is built
+
+Everything is data-driven and code-first. All geometry is procedural primitives with a
+three-light rig and baked static meshes; all text uses a generated bitmap font; all audio is
+generated WAVs. There is **no MonoGame Content Pipeline (.mgcb)**, no external editor and no
+native tooling — JSON is read with `System.Text.Json`, PNGs via `Texture2D.FromStream`, WAVs
+via `SoundEffect.FromStream`. Simulation runs at a **fixed 60 Hz** with render interpolation
+between physics steps.
+
+```
+src/
+  LastOneRich/        the game
+    Core/             services: Input, AudioBank, SaveSystem, Achievements, Rng, Json,
+                      BitmapFont, Camera3D, GeometryRenderer, Particles, BuildInfo, LorGame
+    World/            GPU-free simulation: Level, CollisionWorld, Phys, PlayerController,
+                      BotController, Hazards, BreakTiles, Modes, RaceTracker, WaypointGraph
+    Season/           SeasonRun (cast, wallet, rounds), TwistValidator, MenuCast
+    States/           Boot → Welcome → MainMenu → Intro → Gameplay → Results → BankRisk /
+                      CashOut → TwistReveal → Auction → SeasonEnd, plus PauseMenu,
+                      SettingsScreen, CreditsState, ContentErrorState
+    Cine/             CutscenePlayer (tokenised JSON timelines)
+  HeadlessSim/        GPU-free harness: replays all 12 rounds with the real physics/AI/rules
+content/              all game data and assets (see section 5)
+tools/                asset generators and the QA verifier suite (see section 7)
+docs/                 screenshots
+```
+
+The **World layer references no XNA Graphics types at all**, which is what makes `HeadlessSim`
+possible: it links the same assembly and simulates entire seasons with no GPU and no window,
+so "the bots can actually finish this level" is a testable fact rather than a hope.
+
+---
+
+## 2) Controls
+
+The camera is a **mouse-look chase camera**, and movement is **camera-relative**: your keys
+produce screen-space intent which is converted to world directions using the live camera
+basis, so **A is always screen-left and D is always screen-right at every camera angle**.
+
+### Playing a round
+
+| action | input | gamepad |
+|---|---|---|
+| **Look / aim the camera** | **move the mouse** | right stick |
+| **Move** | **W A S D** (or arrow keys) | left stick |
+| **Jump** | **Space** | A |
+| **Dive** (burst dash, has a cooldown) | **Shift** (left or right) | X |
+| **Pause** | **Esc** | Start |
+| Debug overlay (debug builds) | F3 | — |
+
+The mouse cursor is captured while a round is being played and released the moment you pause,
+finish or alt-tab away. Mouse **sensitivity**, **invert Y** and **camera distance** are all in
+Settings ▸ Controls; `cameraHeight`, `pitchMinDeg` and `pitchMaxDeg` can be hand-edited in
+`content/data/controls.json`.
+
+### Menus and ceremonies
+
+| action | input | gamepad |
+|---|---|---|
+| Move the highlight | ↑ ↓ or move the mouse over a row | d-pad / left stick |
+| Confirm / skip | Enter, Space, E, or left-click the highlighted row | A |
+| Back / close | Esc | B |
+| Binary choice (BANK vs RISK, cash-out) | ← → or 1 / 2, then Enter | d-pad / bumpers |
+
+### Remapping
+
+Every binding lives in `content/data/controls.json`:
+
+```json
+{
+  "moveLeft":  ["A", "Left"],  "moveRight": ["D", "Right"],
+  "moveForward": ["W", "Up"],  "moveBack":  ["S", "Down"],
+  "jump": ["Space"],           "dive":      ["LeftShift", "RightShift"],
+  "confirm": ["Enter", "Space", "E"],
+  "pause": ["Escape"],         "debugOverlay": ["F3"]
+}
+```
+
+Edit, save, restart. Unknown key names are ignored; delete the file to get the defaults back.
+
+---
+
+## 3) How to run
 
 ### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (8.0.400+)
-- Visual Studio 2022 (workload: *.NET desktop development*) — or just the `dotnet` CLI
 
-### Run (Visual Studio)
+* [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (8.0.400 or newer)
+* Visual Studio 2022 with the *.NET desktop development* workload — or just the `dotnet` CLI
+
+### Visual Studio
+
 1. Open `LastOneRich.sln`
 2. Set **LastOneRich** as the startup project
-3. F5
+3. Press **F5**
 
-### Run (CLI)
-```bash
-dotnet run --project src/LastOneRich -c Release
-```
-
-## Building for Release
-
-Create a self-contained Windows x64 release build with:
+### Command line
 
 ```bash
-dotnet publish src/LastOneRich/LastOneRich.Game.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+dotnet run --project src/LastOneRich/LastOneRich.csproj -c Release
 ```
 
-### Headless validation harness (CI / balance testing)
-Simulates real races with the *same physics + AI code* the game uses (no GPU, no window):
-```bash
-dotnet run --project src/HeadlessSim -c Release
-```
-Current result: **full 12-round season — ALL CHECKS PASSED ✔** (per-round verdicts,
-roster shrink 24→3, champion line, exit 0). It verifies the season/twist/level validator,
-every mode's scoring/elimination, and the **camera input-axis acceptance check**
-(cam.RightDir must equal screen-right for the chase cam — the A/D regression gate).
+### Settings
 
-| flag | effect |
-|---|---|
-| `--debug` | 5s position trace per round + per-round verdicts |
-| (removed) `--fine` / `--who` | replaced by the full-season harness |
-
-### Dev launch flags (game)
-| flag | effect |
-|---|---|
-| `--goto=menu` | skip the studio splash |
-| `--goto=intro` | jump straight into the intro cutscene |
-| `--goto=game` | jump straight into Round 1 gameplay |
-| `--round=N` | with `--goto=game`: start at season round N (1–12; 10 = Auction) |
-
-The game runs a **fixed 60 Hz simulation** with **render interpolation** (actors are drawn
-lerped between the previous and current physics step — no physics/render jitter), an
-exponentially smoothed chase camera, and **explicit render-state isolation** between the
-3D passes and every SpriteBatch/UI pass.
-| `--overlay` | start with the F3 debug overlay visible |
-| `--shot=path.png --shot-frame=N` | save a screenshot at frame N, then exit |
-| `--safe` | neither read nor write `saves/settings.json` for this run, so a saved display mode can never lock you out of booting |
-
-`--safe` is also what the game does **by itself** if a launch that applied a non-default
-resolution/fullscreen never reached its first rendered frame: `saves/.boot-probe` is armed before
-the device is created and cleared by the first successful `Draw`, and a leftover probe means
-"boot once with the settings ignored" (the file stays intact and is retried next launch).
-
-### Settings (menu ▸ SETTINGS, or pause ▸ SETTINGS)
-
-One screen, two entry points (`States/SettingsScreen.cs`), four tabs:
+One settings screen, reachable from the main menu and from the pause menu, with four tabs:
 
 | tab | rows |
 |---|---|
 | GRAPHICS | resolution (6 modes), fullscreen, VSync, FOV 50–100°, fog |
 | AUDIO | master / music / SFX volume, 0–100 |
-| CONTROLS | mouse sensitivity (% of default), invert Y, camera distance |
-| GAMEPLAY | difficulty — CASUAL / STANDARD / HARDCORE (rival pace + drone patrol speed; player physics untouched) |
+| CONTROLS | mouse sensitivity, invert Y, camera distance |
+| GAMEPLAY | difficulty — CASUAL / STANDARD / HARDCORE (affects rivals and hazards only) |
 
-Everything is stored in the **existing** `ControlsDTO` (`Keybinds.Settings`) — no second settings
-model — and persisted to `saves/settings.json` beside `saves/save.json`. `content/data/controls.json`
-stays the shipped default; the save file overlays it at startup, field by field, and always wins.
-Edits save as you make them and apply live (audio faders, FOV, fog, VSync, camera, sensitivity,
-difficulty-on-next-round) except **resolution / fullscreen**, which queue behind an
-`APPLY & RESTART` prompt because flipping the swapchain under a live player is never a surprise
-you want. Hand-editable extras: `cameraHeight`, `pitchMinDeg`, `pitchMaxDeg`.
+Everything is stored in `saves/settings.json`, which overlays `content/data/controls.json`
+field by field at startup. Changes apply live except resolution and fullscreen, which queue
+behind an *APPLY & RESTART* prompt.
 
-### Career save (Priority 4)
+If a launch applies a saved display mode and never reaches its first rendered frame, the game
+detects the stale boot probe and boots **once** with the display overrides ignored, so a bad
+resolution can never lock you out. Your settings file is left intact and retried next launch.
 
-`saves/save.json` is now **versioned** (schema v2: round/podium/win stats, best bank, achievement
-list) with forward **migration** from v1 files, written **atomically** (temp file + rename, with
-the previous good write kept as `save.json.bak` and used as automatic fallback). A crash or a
-hand-edit can never tear the career file; quitting flushes best-effort via `LorGame.OnExiting`.
+### Save data
 
-### Achievements (Priority 5)
+`saves/save.json` (next to the executable) holds career money, seasons played, championships
+and unlocked achievements. It is versioned, written atomically, and keeps the previous good
+write as `save.json.bak` as an automatic fallback. `saves/game.log` is a best-effort runtime
+log, and `saves/crash.txt` is written if the game dies unexpectedly.
 
-Ten Season-1 achievements (`Core/Achievements.cs`), evaluated once per round at the results
-ceremony and at the season choke points (bank/risk decision, cash-out, champion) — never polled
-per frame. Unlocks persist into `save.json` immediately, sting the crowd, and ride a golden
-toast above whatever state is on screen. The main menu gained an **ACHIEVEMENTS** trophy case
-(earned = gold, locked = `???`). One anchor was deliberately provisional: `glass_perfect`
-meant "finish Round 6", with a `PRIORITY 6 NOTE` in `Achievements.EvaluateRound` marking
-where it re-anchors to `TilesBroken == 0`. Priority 6 closes that note.
+### Developer launch flags
 
-### Breakable glass (Priority 6)
-
-Round 6 **GLASS PATH MEMORY** is now a real puzzle instead of scenery. `World/BreakTiles.cs`
-adds `BreakTile`, following the existing `Hazards.cs` pattern and cycling
-`Solid → Cracking → Shattered → Reforming`. A pane owns its collider and detaches it on
-shatter, so the hole is physically real. `Actor.TilesBroken` counts the panes that go down
-under you, and `glass_perfect` now requires `Finished && TilesBroken == 0`.
-
-Each row has exactly one safe pane (invariant enforced in `Level.BuildBreakTiles`, seeded by
-`glassSeed` so a round is reproducible). Panes reform after `reformTime`, which matters more
-than it sounds: with reform disabled, the opening stampede permanently destroyed the fake panes
-in row 0 and the course became unfinishable for everyone who respawned behind it.
-
-Bots read the glass through `BotController.UpdateGlassBrain`, gated on `PuzzleSkill`. They may
-guess wrong, fall, respawn and try again exactly like the player, and a pane someone has already
-proved safe becomes public knowledge the rest of the field will follow. Hesitation is modelled as
-a ground-only "remembering" beat — a contestant cannot recall the pattern mid-air — so low skill
-means lingering on glass, and lingering is what drops you through it.
-
-New world-space particles (`Core/WorldParticles.cs`, a 512-slot allocation-free pool) throw shards
-on shatter, and four generated cues (`glass_crack`, `glass_break`, `glass_land`, `glass_reform`)
-ship via `tools/make_audio.py`. The HUD gains a glass panel reading `GLASS n/12 · FLAWLESS` until
-your first break.
-
-Tuning was driven by a headless simulation of the round rather than by eye. Across 12 seeds the
-course yields 5-6 finishers out of 7, a flawless run is available in 12/12 seeds, and panes broken
-correlates with `PuzzleSkill` at **r = −0.84**.
-
----
-
-## 2) Controls (GDD §4)
-
-| action | keyboard | gamepad |
-|---|---|---|
-| Move | WASD / arrows | left stick |
-| Jump | Space | A |
-| Dive (burst dash, cooldown) | Shift | X |
-| Confirm / skip | Enter / Space / E | A |
-| Menu choice | ← → or 1 / 2 | d-pad / bumpers |
-| Pause | Esc | Start |
-| Debug overlay | F3 | — |
-
-### Remapping keys — `content/data/controls.json`
-```json
-{ "moveLeft": ["A", "Left"], "moveRight": ["D", "Right"], "moveForward": ["W", "Up"],
-  "moveBack": ["S", "Down"], "jump": ["Space"], "dive": ["LeftShift", "RightShift"], ... }
-```
-Edit, save, restart. Invalid names are ignored; delete the file to get defaults back.
-
-### Movement model (important)
-Input is **camera-relative**: keys/stick produce *screen-space intent* which
-`GameplayState.ResolveMove` converts to world XZ using the live chase-camera basis —
-so **A is always screen-left and D always screen-right**, at every camera yaw.
-The F3 overlay shows RAW intent vs WORLD direction, plus FPS and WASD indicators.
-
----
-
-## 3) Season 1 — the 12 rounds
-
-| # | round | mode | elimination |
-|---|---|---|---|
-| 1 | WELCOME RUN | Race (obstacle course) | TimeTrialRankCut 20% |
-| 2 | SHRINKING SPOTLIGHT | SurvivalZone (spotlight shrinks) | ScoreRankCut 25% |
-| 3 | DRONE DODGE | StrikesOut (3 scans = out) | StrikesOut (+percent fallback) |
-| 4 | PRIZE SHOP MAZE | Race through conveyor maze | TimeTrialRankCut 8% |
-| 5 | BLOCK BOOM TOWER | ScoreCollect (vault→deposit bricks) | ScoreRankCut 8% |
-| 6 | GLASS PATH | Race on stepping stones | TimeTrialRankCut 8% |
-| 7 | TRIVIA GATES | Race through trivia door walls | TimeTrialRankCut 8% |
-| 8 | THE HEIST | ScoreCollect under hammers | ScoreRankCut 8% |
-| 9 | FREEZING ROOM | SurvivalZone on ice | ScoreRankCut 25% |
-| 10 | THE AUCTION OF DOOM | intermission — buy upgrades | — |
-| 11 | MEGA GAUNTLET | Race remix of rounds 1–9 | TopNAdvance (top 3) |
-| 12 | THE BUTTON | FinaleButton (king-of-the-hill) | last-one-standing wins |
-
-Season shape: 24 contestants (6 rivals + 17 fill bots + YOU), roster shrinks to a
-3-contestant Button finale. Twist pools per round, cash-out offers after rounds 2/4/6/8,
-five auction items (shield, sabotage, extra life, golden ticket, twist preview).
-
-### Modes (all in `World/Modes.cs`, pure data + code)
-- **Race** — waypoint course, checkpoint respawns, finish-time ranking.
-- **SurvivalZone** — score = seconds inside a shrinking spotlight; elimination by score rank.
-- **StrikesOut** — scanner drones patrol bands; each scan = 1 strike (6 s immunity),
-  3 strikes = out; bots dodge by crossing behind the sweep.
-- **ScoreCollect** — grab bricks at the vault (carry cap 3, carrying slows you ×0.62),
-  deposit for cash; most banked wins.
-- **FinaleButton** — stand on the button to drain rivals' scores (1.5/s per presser);
-  standing drains stamina (burnout → forced off 5 s); waiting off-button builds score.
-
-### Visual language (Core/ColorPalette.cs — one identity per object class)
-charcoal floors · grey barriers · **green = safe/finish** · **glowing orange = hammers** ·
-glowing blue = wind · yellow = conveyors/bricks · pale cyan = ice · teal = safe stones ·
-deep red = danger pads · white drones with **glowing red scan rotors** · bright red YOU.
-The static world (geometry, crowd, floor grid, edge-warning curbs, hazard decals) is **baked
-once at load** into a single vertex buffer; hazards/interactives batch into an **unlit glow
-pass** so they pop in shadow. Actors render with a fake height-scaled drop shadow and
-world-to-screen name tags; the player has a subtle red emissive body. Fog (90→240) matches
-the near-black-blue sky. Fixed rival palette: NOVA purple, JAX orange, MIRA teal, TANK slate,
-LUXE gold, PIXEL pink.
-
-### Finalization guarantees
-- Unknown/unimplemented round modes fall back to Race rules with a warning HUD (never crash).
-- Bot stuck-recovery fires after 1.5 s; falls respawn at the last checkpoint with synced render state.
-- Timer pulses red under 15 s; twist banner drops in at round start colored by severity.
-- Leaderboard caps at 10 rows (+N more), highlights YOU, greys out eliminated runners.
-- HeadlessSim verifies all 12 rounds deterministically — exit 0 = shippable.
-
-### What was in the slice (still true)
-
-- **Level 1 "WELCOME RUN"** — pure JSON (`content/data/levels/level01.json`): start pad,
-  twin conveyor belts, two rotating hammers, a hammer gauntlet, stepping stones through a
-  slime slow-pool, two moving-platform ferries over a void, a pulsing headwind + crosswind
-  stretch, and ramped finish plaza with prize podium and confetti crowd.
-- **Player controller** — arcade run/jump/air-control/dive with coyote time, jump buffering,
-  step-up ledges, moving-platform carry, forgiving respawns at checkpoints.
-- **Waypoint bots (GDD §10)** — Dijkstra over a waypoint graph, personality-weighted route
-  risk, honest jump-ballistics timing, platform waits/centering, stumbles, comedic bumps,
-  stuck recovery. 6 rivals: NOVA, JAX, MIRA, TANK, LUXE, PIXEL (`content/data/bots.json`).
-- **Elimination system (GDD §11.2)** — `TimeTrialRankCut` (bottom 20%) as pure data + code.
-- **Results ceremony** — dramatic rank reveal, ELIMINATED stamps + stinger, payout breakdown.
-- **Economy (GDD §6)** — BankedCash (safe) vs RiskedCash (prize pot), payout formula
-  (base + placement + top-half + speed bonus), **Bank vs Risk ×2** decision, **cash-out
-  offer** ($60k walk-away ending), $1,000,000 champion ending, elimination ending. `save.json` persists career stats.
-- **Twists (GDD §14)** — data-driven modifiers with a **validator** (bounds, conflicts,
-  round gates). The validator's caps double as difficulty floors for slowdown effects.
-- **JSON cutscene player (GDD §9)** — timed beats: camera moves (lerped, smoothstepped),
-  speaker subtitles, prize overlays, audio stingers, confetti events.
-- **State machine (GDD §18.1)** — Boot → Menu → Intro → Gameplay → Results → BankRisk →
-  CashOut → TwistReveal → Gameplay → … → SeasonEnd → Menu.
-- **Update order (GDD §18.3)** — input → player → AI → platforms → hazard effects →
-  collision integration → scoring/elimination → camera → UI.
-
----
-
-## 4) Project layout
-
-```
-last-one-rich/
-├── LastOneRich.sln
-├── build.sh                        # sandbox/CLI build helper
-├── tools/                          # asset generators (Python + Pillow)
-│   ├── make_font.py                #   bitmap font atlas + metrics  -> content/gfx/font.*
-│   ├── make_gfx.py                 #   particle / white pixel       -> content/gfx/*.png
-│   └── make_audio.py               #   all SFX + music loop (WAV)   -> content/sfx/*.wav
-├── content/                        # all data-driven content (copied to output, no .mgcb)
-│   ├── data/
-│   │   ├── season.json             # 12 rounds, twist pools, cash-out offers, grand prize
-│   │   ├── economy.json            # payout formula params + auction items
-│   │   ├── bots.json               # rivals + fillNames/fillCount (24-strong cast)
-│   │   ├── twists.json             # modifiers + validator caps (belt/wind/hammer/slime/ice/drone/timer)
-│   │   ├── controls.json           # remappable keybinds
-│   │   └── levels/level01..12.json # one JSON per round (round 10 = auction, no file)
-│   ├── cutscenes/intro_template.json # tokenized beats ({ROUND_NUM}, {MODE_OBJ}, cameraOrbit…)
-│   ├── gfx/  sfx/                  # generated at build-time by tools/
-└── src/
-    ├── LastOneRich/
-    │   ├── Core/                   # game loop, state machine, input, camera, renderer,
-    │   │                           # bitmap font, audio, particles, save, JSON loader
-    │   ├── World/                  # DTOs (JSON schema), physics, collision, hazards,
-    │   │                           # waypoint AI, bot/player controllers, race rules, Level
-    │   ├── Season/                 # SeasonRun, Wallet, payout formula, TwistValidator
-    │   ├── Cine/                   # cutscene player
-    │   └── States/                 # Boot, MainMenu, IntroCutscene, Gameplay, Results,
-    │                               # BankRisk, CashOut, TwistReveal, SeasonEnd + HUD
-    └── HeadlessSim/                # GPU-free race simulator + content validator (CI gate)
-```
-
-### Design notes (why it's built this way)
-- **World layer is GPU-free.** `Actor`, `CollisionWorld`, hazards, `BotController`,
-  `RaceTracker` reference no Xna Graphics types — the headless sim reuses them 1:1,
-  so "bots can finish the level" is a *testable fact*, not a hope.
-- **No Content Pipeline.** JSON is read with `System.Text.Json`; PNGs via
-  `Texture2D.FromStream`; WAVs via `SoundEffect.FromStream`. All assets are regenerated
-  placeholders — replace `content/gfx/*` and `content/sfx/*` with real art/audio later
-  without touching code.
-- **Rendering baseline:** per-face normal vertices + `BasicEffect` directional lighting
-  (ambient + key light), explicit render states per pass (Opaque/AlphaBlend + depth),
-  MSAA (`PreferMultiSampling`), Reach profile for max hardware compatibility.
-- **Collision** is custom AABB with axis-separated resolve *using the min-penetration axis*
-  (this exact bug class was found and fixed via the headless harness), step-up ledges,
-  ramp height-fields, platform carry.
-- **All JSON is hot-editable** — change a hammer speed or slime zone and re-run; no rebuild
-  needed (content is copied at build; run `dotnet build` once after edits).
-
----
-
-## 5) GDD coverage map
-
-| GDD section | where |
+| flag | effect |
 |---|---|
-| §3.1 Story campaign (slice: 3 rounds) | `content/data/season.json` |
-| §4 feel/controller | `src/LastOneRich/World/PlayerController.cs`, `Phys.cs` |
-| §5 core loop | `States/*` chain |
-| §6 economy/prizes/cash-out | `Season/SeasonRun.cs` (Wallet, payout), `States/BankRisk*`, `CashOut*`, `SeasonEnd*` |
-| §7 characters | `content/data/bots.json` + host/co-host/announcer lines in states & cutscene |
-| §8 levels 1–12 | `content/data/levels/level0*.json`, `level1*.json` |
-| §9 cutscene timelines | `content/cutscenes/intro_template.json`, `Cine/CutscenePlayer.cs` (tokens + cameraOrbit) |
-| §10 waypoint bots + personalities | `World/WaypointGraph.cs`, `World/BotController.cs` |
-| §11 hazards & elimination | `World/Hazards.cs`, `World/Hazards2.cs` (DroneScanner, IceZone), `World/Modes.cs` + `Elimination.Resolve` (StrikesOut / ScoreRankCut / TopNAdvance / TimeTrialRankCut), `World/RaceTracker.cs` |
-| §12 broadcast HUD | `States/GameplayState.cs` (HUD), `ResultsState` |
-| §13 data-driven content | `World/DTOs.cs`, `Core/Json.cs`, `content/data/**` |
-| §14 AI-created content guardrails | `Season/TwistValidator.cs` + HeadlessSim |
-| §15 audio | `Core/AudioBank.cs`, `content/sfx/*` (EDM loop, stingers, crowd) |
-| §17 save/progression | `Core/SaveSystem.cs` → `saves/save.json` — versioned, atomic, `.bak` fallback (Priority 4); achievements in `Core/Achievements.cs` (Priority 5) |
-| §18 architecture | `Core/StateMachine.cs`, `Core/LorGame.cs` (update order) |
+| `--goto=menu` \| `intro` \| `game` | skip ahead (debug builds) |
+| `--round=N` | with `--goto=game`, start at season round N (1–12) |
+| `--overlay` | start with the F3 debug overlay visible |
+| `--shot=path.png --shot-frame=N` | save a screenshot at frame N and exit |
+| `--safe` | neither read nor write `saves/settings.json` for this run |
+
+### Headless validation harness
+
+```bash
+dotnet run --project src/HeadlessSim/HeadlessSim.csproj -c Release
+```
+
+Simulates the full 12-round season with the same physics, AI and scoring code as the game —
+no GPU, no window. It prints a per-round verdict, the roster shrinking 24 → 3 and the
+champion, and exits 0 only when every check passes. `--debug` adds a 5-second position trace.
 
 ---
 
-## 6) Roadmap from here (suggested order)
+## 4) How to build a release
 
-1. **Scale content, not code**: author levels 2–12 as JSON from templates; the Level loader
-   already supports all needed primitives. Add `DroneScanner` + `LaserGate` + `BreakTile`
-   hazard classes (they fit the existing `Hazards.cs` pattern).
-2. **More elimination rules**: `ScoreRankCut`, `LastNStanding`, `StrikesOut`, `TeamCut`
-   (slots already exist in `EliminationDTO.Rule`).
-3. **Trivia/minigame states** for Level 7 (`questions_trivia.json` per GDD).
-4. **Shop/auction intermissions** (Level 4/10) using `SpendStyle` personalities.
-5. **Full 12-round arc**: extend `season.json`, add per-level cutscene JSONs, grand-finale
-   "The Button" state.
-6. **Replace placeholder assets**: font/UI theme, arena materials, contestant models —
-   swap via Content Pipeline or keep runtime loading.
+Self-contained Windows x64 build (no .NET runtime needed on the target machine):
+
+```bash
+dotnet publish src/LastOneRich/LastOneRich.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+```
+
+The output lands in `publish/win-x64/` as `LastOneRich.exe` plus the `content/` folder, which
+is copied next to the executable by the csproj. Ship the whole folder.
+
+Before you publish, run the QA gate (see section 7) — the content validator is the cheap way
+to find out that a level file went missing before a player does.
+
+The published build reads `content/version.json`:
+
+```json
+{ "version": "1.0.0", "build": "release" }
+```
+
+Bump `version` for every build you hand to anyone. The game loads it at boot and shows it in
+small grey text in the bottom-right corner of the main menu, which turns "it crashed" into
+"v1.0.0 release crashed". If the file is missing or malformed the game boots exactly as
+normal, logs the reason to `saves/game.log` and simply draws no stamp.
 
 ---
 
-## 7) Known slice limitations
+## 5) The content folder
 
-- Music is a 4-bar placeholder loop; host VO is text-only.
-- Party Playlist & Practice modes (GDD §3.2/3.3) not started.
-- Menu navigation is keyboard/gamepad only (no mouse hit-testing).
-- Window resize keeps a fixed 1280×720 virtual canvas (letterboxed scaling).
+Everything under `content/` is loose, hot-editable data — no rebuild step, no pipeline. It is
+copied beside the executable on build and publish.
+
+```
+content/
+  version.json            build stamp: { "version", "build" } — shown in the menu corner
+  data/
+    season.json           the 12 rounds: level id, base reward, twist pool, cash-out flags,
+                          cash-out offer amounts, grand prize, cast size
+    levels/
+      level01..09,11,12   one JSON per playable round (round 10 is the Auction, no file):
+                          id, name, type, timeLimit, parTime, killY, respawnPenalty,
+                          spawns / spawnGrid, checkpoints, finish, elimination rule,
+                          geometry, conveyors, slimes, winds, hammers, movers, drones,
+                          iceZones, safeZone, vault, deposit, button, breakTiles, waypoints
+    bots.json             the six named rivals (colour + personality weights: riskTolerance,
+                          aggression, puzzleSkill, routeGreed, pace, spendStyle) plus the
+                          fill-bot count and name pool
+    twists.json           every twist: effects (target.param × multiplier), the maxMult bound
+                          the validator enforces, minRound and conflicts
+    economy.json          risk multiplier, placement and speed bonuses, auction item catalogue
+    controls.json         default keybinds and mouse/camera tuning
+  cutscenes/
+    intro_template.json   tokenised cutscene timeline (camera beats, dialogue, orbit, sfx)
+  gfx/
+    font.png / font.json  the generated bitmap font and its glyph metrics
+    pixel.png             1×1 white texture for all UI rectangles
+    particle.png          particle sprite
+  sfx/                    16 generated WAVs: music_loop, blip, cash, cheer, go, move, jump,
+                          splash, hammer_hit, glass_crack / _break / _land / _reform,
+                          stinger_elim, stinger_twist, stinger_win
+```
+
+Edit any of it and relaunch. `tools/validate_content.py` checks the whole folder against the
+rules the game applies at load time; `tools/make_gfx.py`, `make_font.py` and `make_audio.py`
+regenerate the placeholder assets.
+
+---
+
+## 6) Achievements
+
+Ten Season-1 achievements, stored in `saves/save.json` and displayed in the main menu's
+trophy case (earned = gold, locked = `???`). They are evaluated at the results ceremony and
+at the season's decision points, never polled per frame; unlocking one persists immediately
+and raises a golden toast over whatever is on screen.
+
+| id | name | how to earn it |
+|---|---|---|
+| `first_steps` | FIRST STEPS | Survive your first round of the season. |
+| `podium` | PODIUM FINISH | Place in the top 3 of any round. |
+| `round_win` | CENTER STAGE | Win a round outright — 1st of the whole field. |
+| `first_bank` | SAFE HANDS | Choose BANK at the Bank vs Risk decision. |
+| `risk_taker` | DOUBLE OR NOTHING | Risk the pot and survive to collect the multiplier. |
+| `money_bags` | HEIST MASTER | Deposit $100,000 or more in a single heist round. |
+| `drone_ghost` | GHOST PROTOCOL | Clear DRONE DODGE without taking a single strike. |
+| `glass_perfect` | FLAWLESS GLASS | Cross GLASS PATH MEMORY without breaking one tile. |
+| `cash_out` | KNOW WHEN TO FOLD 'EM | Take the cash-out offer and walk away. |
+| `champion` | LAST ONE RICH | Win the $1,000,000 grand prize. |
+
+---
+
+## 7) QA tooling
+
+`tools/` holds the asset generators and a Python verifier suite that needs no .NET SDK. Run
+all five before tagging a build; each exits 0 only when it is happy.
+
+```bash
+python3 tools/csyntax.py           # C# lexical + structural verification
+python3 tools/semcheck.py          # cross-layer semantic + layer-isolation checks
+python3 tools/reach.py             # state-graph and waypoint-graph reachability
+python3 tools/simglass.py          # Round 6 glass course solvability simulation
+python3 tools/validate_content.py  # the content/ gate — season, levels, bots, twists, audio
+```
+
+| tool | what it proves |
+|---|---|
+| `csyntax.py` | Every `.cs` file lexes: comments, verbatim and interpolated strings (including their code holes) and char literals all terminate, brackets balance, `#if` regions balance, one namespace per file matching its folder. |
+| `semcheck.py` | The strings that wire the game together resolve: `Json.Load<T>` types and paths, level ids, sfx event names, `Action("...")` binding names, achievement ids, twist channels. Also enforces the HeadlessSim contract — `World/`, `Season/` and `HeadlessSim` touch no Graphics, Input, SaveSystem, Achievements or GameServices, and `MenuCast` never draws from the shared `Rng`. |
+| `reach.py` | Every game state is constructible from `BootState`, and every level's waypoint graph routes every spawn slot to its goal with no orphan nodes. |
+| `simglass.py` | Round 6 has exactly one safe pane per row, a jumpable support chain measured against `Phys.cs`, sane crack/reform timings (including under the BRITTLE GLASS twist), and is both flawless-capable and always crossable. |
+| `validate_content.py` | The whole `content/` tree: season round numbering and level files, required level fields, rival personality weights in 0..1, twist multipliers inside their own bounds, every sfx event backed by a real WAV, cash-out offers matched to their rounds. |
+
+`tools/make_gfx.py`, `tools/make_font.py` and `tools/make_audio.py` regenerate the placeholder
+textures, bitmap font and WAVs.
+
+---
+
+## 8) Credits
+
+**LAST ONE RICH!** — a Volt Dome mega-challenge.
+
+| | |
+|---|---|
+| **Developer** | Volt Dome Studios |
+| **Engine** | MonoGame DesktopGL · .NET 8 · C# |
+| **Design, code, content** | Volt Dome Studios |
+| **Graphics** | Every shape on screen is procedural geometry — no imported 3D models. |
+| **Audio** | Every sound effect and music bed is generated — no licensed audio. |
+| **Fonts** | Bitmap font generated by `tools/make_font.py`. |
+
+Original fictional branding. Any resemblance to a real televised mega-challenge is
+affectionate energy, not affiliation.
+
+**Thanks for playing.**

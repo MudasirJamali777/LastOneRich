@@ -219,6 +219,16 @@ public sealed class MainMenuState : IGameState
         var cs = f.Measure(career, 0.55f);
         f.Draw(sb, career, new Vector2(640, 668), new Color(150, 160, 190), 0.55f, 0f, new Vector2(cs.X / 2, 0), true);
 
+        // Build stamp, bottom-right. Dim and small on purpose: it is for bug reports, not for
+        // the player. BuildInfo.Stamp is "" whenever content/version.json could not be read,
+        // and then nothing is drawn at all — the menu looks exactly as it did before.
+        if (BuildInfo.Stamp.Length > 0)
+        {
+            var vs2 = f.Measure(BuildInfo.Stamp, 0.42f);
+            f.Draw(sb, BuildInfo.Stamp, new Vector2(1280 - 18, 692), new Color(96, 102, 126),
+                0.42f, 0f, new Vector2(vs2.X, 0));
+        }
+
         if (_howTo) DrawHowTo(f);
         if (_achievements) DrawAchievements(f);
         if (_settingsOpen) _settings.Draw(f, sb);
