@@ -116,6 +116,7 @@ public sealed class LorGame : Game
         var sb = new SpriteBatch(GraphicsDevice);
         Input.AttachHost(this); // enables mouse capture for gameplay mouse-look
         GameServices.Init(GraphicsDevice, sb, _launch);
+        BuildInfo.EnsureLoaded();                 // content/version.json — fail-soft, see BuildInfo
         AudioBank.ApplyVolumes();                 // settings ▸ Audio takes effect before the first sound
         _gfx.SynchronizeWithVerticalRetrace = Keybinds.VSync; // live VSync (no device reset needed)
 #if DEBUG
