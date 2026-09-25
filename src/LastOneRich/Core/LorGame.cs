@@ -65,8 +65,8 @@ public sealed class LorGame : Game
         }
         catch { }
 
-        Deactivated += OnDeactivated;
-        Activated += OnActivated;
+
+
 
         // Rendering baseline (rendering task): MSAA on. Reach profile = maximum
         // compatibility (old GPUs / software GL / VMs); slice vertex counts are tiny.
@@ -81,14 +81,14 @@ public sealed class LorGame : Game
         TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
     }
 
-    void OnDeactivated(object sender, EventArgs e)
+    protected override void OnDeactivated(object sender, EventArgs args)
     {
         if (_states?.Current is GameplayState gameplay && gameplay.PauseForDeactivation())
             _deactivatedMidGameplay = true;
         Input.SetMouseCapture(false);
     }
 
-    void OnActivated(object sender, EventArgs e)
+    protected override void OnActivated(object sender, EventArgs args)
     {
         if (!_deactivatedMidGameplay) return;
         _deactivatedMidGameplay = false;
@@ -202,7 +202,7 @@ public sealed class LorGame : Game
 
     /// <summary>Best-effort career flush on exit. Store is atomic, so quitting mid-frame
     /// can never tear save.json (Priority 4).</summary>
-    protected override void OnExiting(object sender, System.EventArgs args)
+    protected override void OnExiting(object sender, ExitingEventArgs args)
     {
         if (GameServices.Save != null) SaveSystem.Store(GameServices.Save);
         base.OnExiting(sender, args);

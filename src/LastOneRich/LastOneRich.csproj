@@ -12,7 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.2.1105" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+    <PackageReference Include="MonoGame.Library.SDL" Version="2.32.10.2" />
   </ItemGroup>
 
   <!-- Data-driven content: JSON levels/config + generated gfx/sfx. No MGCB needed for the slice. -->
